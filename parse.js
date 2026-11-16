@@ -115,6 +115,12 @@ const Parse = (() => {
 
   async function file(f) {
     const name = f.name.toLowerCase();
+    if (name.endsWith(".json")) {
+      // A Scene Blocker production file: scenes, characters, floor plans (and optional blocking)
+      const d = JSON.parse(await f.text());
+      if (!d.scenes || !d.characters) throw new Error("This is not a Scene Blocker production file.");
+      return { title: d.title, scenes: d.scenes, characters: d.characters, plans: d.plans || {}, locPlans: d.locPlans || {}, blocks: d.blocks || null, pack: true };
+    }
     let lines;
     if (name.endsWith(".pdf")) lines = await pdfLines(await f.arrayBuffer());
     else if (name.endsWith(".fdx")) lines = fdx(await f.text());

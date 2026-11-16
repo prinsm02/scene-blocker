@@ -27,8 +27,10 @@
     try {
       toast("Reading " + f.name + "...");
       const r = await Parse.file(f);
-      const keepPlans = prod ? prod.plans : {};
-      prod = { id: prod?.id || uid(), title: r.title, characters: r.characters, scenes: r.scenes, plans: keepPlans, locPlans: prod?.locPlans || {} };
+      const keepPlans = r.pack ? r.plans : Object.assign({}, prod ? prod.plans : {});
+      const keepLoc = r.pack ? r.locPlans : (prod?.locPlans || {});
+      if (r.pack) blocks = r.blocks || {};
+      prod = { id: prod?.id || uid(), title: r.title, characters: r.characters, scenes: r.scenes, plans: keepPlans, locPlans: keepLoc };
       r.scenes.forEach(s => { if (!blocks[s.number]) blocks[s.number] = [newSetup(1)]; });
       if (window.Sync && Sync.live) Sync.pushProduction(prod);
       cur.scene = r.scenes[0].number; cur.setup = 0;
@@ -318,6 +320,16 @@
       sel = prevSel; draw();
     };
     im.src = url;
+  };
+
+  $("btnSaveFile").onclick = () => {
+    if (!prod) return toast("Nothing to save yet");
+    const data = { app: "Scene Blocker", version: 1, title: prod.title, characters: prod.characters, scenes: prod.scenes, plans: prod.plans, locPlans: prod.locPlans, blocks, saved: new Date().toISOString() };
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
+    a.download = `${prod.title} - Scene Blocker ${new Date().toISOString().slice(0, 10)}.json`.replace(/[\\/:*?"<>|]/g, "");
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast("Saved. Open it on another device with Import script.");
   };
 
   // ---------- mobile ----------
