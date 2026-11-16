@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1A1D24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scene Blocker">
+<title>Scene Blocker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="splash" id="splash">
+  <img src="assets/icon.svg" alt="" width="96" height="96">
+  <h1>Scene Blocker</h1>
+  <p class="tag">Block it. Shoot it.</p>
+  <div class="bar"><i></i></div>
+  <p class="meta">Version <span id="ver">1.0.0</span><br>Developed by Matthew Prins<br>Born 16 November 2026</p>
+</div>
+<header class="top">
+  <div class="brand"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Scene Blocker</span></div>
+  <button class="icon-btn only-mobile" id="btnScenes" aria-label="Scenes">&#9776;</button>
+  <div class="title" id="sceneTitle">Import a script to start</div>
+  <div class="tabs" id="setupTabs"></div>
+  <div class="spacer"></div>
+  <button class="btn" id="btnExport" title="Save this setup as a picture">Export</button>
+</header>
+
+<main class="layout">
+  <aside class="left" id="left">
+    <div class="prod" id="prodName">No production yet</div>
+    <div class="imports">
+      <label class="btn red">Import script<input type="file" id="inScript" accept=".pdf,.fdx,.fountain,.txt" hidden></label>
+      <label class="btn">Add floor plan<input type="file" id="inPlan" accept="image/*" hidden></label>
+    </div>
+    <input type="search" id="search" placeholder="Search scenes">
+    <ol class="scenes" id="sceneList"></ol>
+  </aside>
+
+  <section class="centre">
+    <div class="planbar">
+      <label>Floor plan for <b id="locName">this location</b>
+        <select id="planPick"></select>
+      </label>
+    </div>
+    <div class="stage" id="stage">
+      <div class="tools" id="tools">
+        <button data-tool="select" class="on" title="Select and move">&#10148;<small>Select</small></button>
+        <button data-tool="char" title="Place a character">&#9679;<small>Character</small></button>
+        <button data-tool="cam" title="Place a camera">&#9635;<small>Camera</small></button>
+        <button data-tool="line180" title="Draw the 180 line">&#8943;<small>180 line</small></button>
+        <button data-tool="gear" title="Lights and gear">&#9733;<small>Gear</small></button>
+      </div>
+      <div class="pick" id="pick"></div>
+      <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="empty" id="empty">Import a script, pick a scene, then choose its floor plan.</div>
+    </div>
+  </section>
+
+  <aside class="right" id="right">
+    <div class="ph" id="propHead">Nothing selected</div>
+    <div id="props"><p class="hint">Tap a mark on the plan to edit it. Tap the same character or camera tool again to add their next position (A1, A2...).</p></div>
+  </aside>
+</main>
+
+<footer class="board">
+  <div class="bh"><b>Storyboard</b> <span id="boardSetup"></span>
+    <label class="btn small">Upload frames<input type="file" id="inFrames" accept="image/*" multiple hidden></label></div>
+  <div class="frames" id="frames"></div>
+</footer>
+
+<div class="toast" id="toast" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="config.js"></script>
+<script>
+  if (window.SB_FIREBASE) ["app", "auth", "firestore"].forEach(m => document.write('<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-' + m + '-compat.js"><\/script>'));
+</script>
+<script src="sync.js"></script>
+<script src="devseed.js"></script>
+<script src="store.js"></script>
+<script src="parse.js"></script>
+<script src="assets.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
