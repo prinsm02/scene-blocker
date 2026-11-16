@@ -17,7 +17,8 @@ const Assets = (() => {
   };
 
   function camera(it, s) {
-    const lens = it.lens ? `<g transform="rotate(${-(it.rot || 0)})"><rect x="${-.75*s}" y="${.75*s}" width="${1.5*s}" height="${.5*s}" rx="${.1*s}" fill="${PANEL}"/><text y="${1.12*s}" text-anchor="middle" font-size="${.32*s}" fill="${TXT}">${esc(it.lens)}</text></g>` : "";
+    const tw = Math.max(1.5, String(it.lens || "").length * .2 + .35) * s;
+    const lens = it.lens ? `<g transform="rotate(${-(it.rot || 0)})"><rect x="${-tw / 2}" y="${.75*s}" width="${tw}" height="${.5*s}" rx="${.1*s}" fill="${PANEL}" stroke="#4A5166" stroke-width="${.02*s}"/><text y="${1.12*s}" text-anchor="middle" font-size="${.32*s}" fill="${TXT}">${esc(it.lens)}</text></g>` : "";
     return `<rect x="${-.6*s}" y="${-.45*s}" width="${1*s}" height="${.9*s}" rx="${.14*s}" fill="${RED}"/><path d="M${.4*s} ${-.25*s} L${.75*s} ${-.48*s} L${.75*s} ${.48*s} L${.4*s} ${.25*s}Z" fill="${RED2}"/><g transform="rotate(${-(it.rot || 0)} ${-.1*s} 0)"><text x="${-.1*s}" y="${.13*s}" text-anchor="middle" font-size="${.36*s}" font-weight="700" fill="#fff">${esc(it.label)}</text></g>${lens}`;
   }
   function character(it, s, colour) {

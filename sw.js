@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION after every change so phones pick up the new files.
-const VERSION = "scene-blocker-v2";
+const VERSION = "scene-blocker-v3";
 const FILES = ["./", "index.html", "style.css", "config.js", "sync.js", "devseed.js", "store.js", "parse.js", "assets.js", "app.js", "manifest.webmanifest", "assets/icon.svg", "assets/icon-180.png", "assets/icon-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())));
