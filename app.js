@@ -233,8 +233,11 @@
   function fit() {
     const p = planObj(); if (!p) return;
     const r = svg.getBoundingClientRect(); if (!r.width || !r.height) return;
-    const k = Math.max(p.w / r.width, p.h / r.height) * 1.04;
-    view = { w: r.width * k, h: r.height * k, x: (p.w - r.width * k) / 2, y: (p.h - r.height * k) / 2 };
+    // keep the plan clear of the floating tool bar (left on desktop, bottom on phones/tablets)
+    const mobile = innerWidth <= 900, padL = mobile ? 0 : 92, padB = mobile ? 78 : 0;
+    const aw = r.width - padL, ah = r.height - padB;
+    const k = Math.max(p.w / aw, p.h / ah) * 1.04;
+    view = { w: r.width * k, h: r.height * k, x: (p.w - aw * k) / 2 - padL * k, y: (p.h - ah * k) / 2 };
     setView();
   }
   window.addEventListener("resize", debounce(fit, 150));
