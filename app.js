@@ -422,7 +422,7 @@
     const m = document.createElement("div"); m.className = "menu"; m.style.left = e.clientX + "px"; m.style.top = e.clientY + "px";
     const n = selItems().length, sized = it && ["char", "cam", "gear", "shape"].includes(it.kind);
     m.innerHTML = it ? `<button data-a="dup">Duplicate</button><button data-a="copy">Copy${n > 1 ? " " + n + " items" : ""}</button><button data-a="next">Copy to next setup</button>${sized ? `<button data-a="big">Bigger ( ] )</button><button data-a="small">Smaller ( [ )</button>` : ""}${it.cx != null ? `<button data-a="straight">Straighten</button>` : ""}${it.kind === "cable" ? `<button data-a="flip">Flip corner</button>` : ""}<button data-a="front">Bring to front</button><button data-a="back">Send to back</button><button data-a="del" class="danger">Delete</button>`
-      : `<button data-a="paste">Paste here</button><button data-a="fit">Fit plan (F)</button><button data-a="keys">Shortcuts (?)</button>`;
+      : `<button data-a="paste">Paste here</button><button data-a="fit">Fit plan (F)</button><button data-a="keys">Shortcuts (?)</button><button data-a="fb">Send feedback</button>`;
     const p = pt(e);
     m.onclick = ev => {
       const a = ev.target.dataset.a; if (!a) return; closeMenus(); const st = setupObj();
@@ -437,6 +437,7 @@
       if (a === "paste") { if (!clip) return toast("Nothing copied yet"); paste(p.x - clip[0].x, p.y - clip[0].y); }
       if (a === "fit") fit();
       if (a === "keys") openSettings();
+      if (a === "fb" && window.Sync) Sync.feedback();
     };
     document.body.appendChild(m);
     const r = m.getBoundingClientRect(); if (r.bottom > innerHeight) m.style.top = (innerHeight - r.height - 8) + "px"; if (r.right > innerWidth) m.style.left = (innerWidth - r.width - 8) + "px";
@@ -562,10 +563,11 @@
       <div class="setrow">Cable darkness<input type="range" min=".15" max="1" step=".05" data-s="cable" value="${SET.cable}"></div>
       <p class="hint">Sizes here are for your screen. To size one mark for everyone, select it and use [ ] or the Size slider.</p>
       <h3>Shortcuts</h3><div class="keys">${KEYS.map(([k, d]) => `<kbd>${k}</kbd><span>${d}</span>`).join("")}</div>
-      ${dev ? `<h3>Developer</h3><button class="btn" data-a="log">Activity log</button>` : ""}
+      <div class="row"><button class="btn" data-a="fb">Send feedback</button></div>
+      ${dev ? `<h3>Developer</h3><button class="btn" data-a="log">Activity log + feedback (Firebase)</button>` : ""}
       <div class="row"><button class="btn red" data-a="x">Close</button></div></div>`;
     box.querySelectorAll("[data-s]").forEach(r => r.oninput = () => { SET[r.dataset.s] = +r.value; saveSet(); draw(); });
-    box.onclick = e => { const a = e.target.dataset.a; if (a === "x" || e.target === box) box.remove(); if (a === "log") { box.remove(); Sync.showLog && Sync.showLog(); } };
+    box.onclick = e => { const a = e.target.dataset.a; if (a === "x" || e.target === box) box.remove(); if (a === "log") { box.remove(); Sync.showLog && Sync.showLog(); } if (a === "fb") { box.remove(); Sync.feedback ? Sync.feedback() : toast("Join your crew first"); } };
     document.body.appendChild(box);
   }
   $("btnSettings").onclick = openSettings;

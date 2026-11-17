@@ -23,7 +23,7 @@
   <h1>Scene Blocker</h1>
   <p class="tag">Block it. Shoot it.</p>
   <div class="bar"><i></i></div>
-  <p class="meta">Version <span id="ver">1.2.0</span><br>Developed by Matthew Prins<br>Born 16 November 2026</p>
+  <p class="meta">Version <span id="ver">1.2.1</span><br>Developed by Matthew Prins<br>Born 16 November 2026</p>
 </div>
 <header class="top">
   <div class="brand"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Scene Blocker</span></div>
@@ -32,6 +32,7 @@
   <div class="tabs" id="setupTabs"></div>
   <div class="spacer"></div>
   <button class="icon-btn" id="btnChat" title="Crew chat" hidden>&#128172;<i id="chatDot" hidden></i></button>
+  <button class="icon-btn" id="btnFeedback" title="Send feedback">&#9993;</button>
   <button class="icon-btn" id="btnSettings" title="Settings and shortcuts (?)">&#9881;</button>
   <span id="savedTag" class="saved" hidden>Saved</span>
   <button class="btn" id="btnExport" title="Save this setup as a picture">Export</button>
@@ -103,6 +104,7 @@
 <script src="parse.js"></script>
 <script src="assets.js"></script>
 <script src="app.js"></script>
+<script>document.getElementById("btnFeedback").onclick = () => window.Sync && Sync.feedback();</script>
 <script>document.getElementById("btnShot").onclick = () => document.getElementById("right").classList.toggle("open");</script>
 </body>
 </html>

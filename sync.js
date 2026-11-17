@@ -205,23 +205,28 @@ window.Sync = (() => {
     P().collection("devlog").doc(session.id).set({ name: me.name, start: session.start, last: Date.now(), acts: session.acts, ua: navigator.userAgent.slice(0, 120) }).catch(() => {});
   }
   function startLog() { flushLog(true); setInterval(() => flushLog(false), 60000); window.addEventListener("pagehide", () => flushLog(true)); document.addEventListener("visibilitychange", () => { if (document.hidden) flushLog(true); }); }
-  async function showLog() {
-    if (!live) return toast("Join the crew first");
-    const q = await P().collection("devlog").orderBy("start", "desc").limit(150).get().catch(() => null);
-    const rows = []; if (q) q.forEach(d => rows.push(d.data()));
-    const mins = r => Math.max(1, Math.round((r.last - r.start) / 60000));
-    const byName = {}; rows.forEach(r => { const b = byName[r.name] ||= { n: 0, m: 0 }; b.n++; b.m += mins(r); });
-    const box = el(`<div class="modal"><div class="card wide"><h2>Activity log (developer)</h2>
-      <p class="hint">Totals: ${Object.entries(byName).map(([n, b]) => `${esc(n)} ${b.n} visit${b.n > 1 ? "s" : ""}, ${b.m} min`).join(" · ") || "none yet"}</p>
-      <div class="devlog"><table><tr><th>Who</th><th>When</th><th>Time</th><th>What they did</th></tr>${rows.map(r => {
-        const c = {}; (r.acts || []).forEach(x => c[x.a] = (c[x.a] || 0) + 1);
-        const scenes = [...new Set((r.acts || []).filter(x => x.a === "scene").map(x => x.d))].slice(0, 12);
-        return `<tr><td>${esc(r.name)}</td><td>${new Date(r.start).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td><td>${mins(r)} min</td><td>${Object.entries(c).map(([k, v]) => k + " " + v).join(", ")}${scenes.length ? "<br><small>Sc " + scenes.map(esc).join(", ") + "</small>" : ""}</td></tr>`;
-      }).join("")}</table></div><button class="btn red" data-a="x">Close</button></div></div>`);
-    box.onclick = e => { if (e.target.dataset.a === "x" || e.target === box) box.remove(); };
-    document.body.appendChild(box);
+  // The log is write-only for the app (firestore.rules); Matthew reads it in the Firebase console.
+  function showLog() { window.open("https://console.firebase.google.com/project/scene-blocker/firestore/databases/-default-/data/~2Fprods~2F" + encodeURIComponent(code || "") + "~2Fdevlog", "_blank"); }
+
+  // ---------- feedback (prods/{code}/feedback, write-only) ----------
+  function feedback() {
+    if (!live) return toast("Join your crew first to send feedback");
+    const box = el(`<div class="modal"><form class="card wide"><h2>Send feedback</h2>
+      <p class="hint">Something broken, missing or confusing? It goes straight to the developer.</p>
+      <label>Type<select name="k"><option>Idea</option><option>Problem</option><option>Question</option></select></label>
+      <label>Your feedback<textarea name="m" rows="5" required placeholder="e.g. I want to..."></textarea></label>
+      <div class="row"><button class="btn red big">Send</button><button type="button" class="btn" data-a="x">Cancel</button></div></form></div>`);
+    const f = box.querySelector("form");
+    box.querySelector('[data-a="x"]').onclick = () => box.remove();
+    f.onsubmit = e => {
+      e.preventDefault(); const m = f.m.value.trim(); if (!m) return;
+      P().collection("feedback").add({ name: me.name, kind: f.k.value, text: m.slice(0, 3000), scene: App.cur.scene || null, setup: App.cur.setup, t: Date.now(), ua: navigator.userAgent.slice(0, 120), ver: (document.getElementById("ver") || {}).textContent || "" })
+        .then(() => toast("Thank you, feedback sent")).catch(() => toast("Not sent, try again"));
+      log("feedback", f.k.value); box.remove();
+    };
+    document.body.appendChild(box); setTimeout(() => f.m.focus(), 50);
   }
 
   window.addEventListener("load", () => setTimeout(start, 100));
-  return { get live() { return live; }, get code() { return code; }, log, showLog, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
+  return { get live() { return live; }, get code() { return code; }, log, showLog, feedback, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
 })();
