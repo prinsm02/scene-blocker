@@ -196,13 +196,16 @@ window.Sync = (() => {
     document.addEventListener("keydown", e => { if (e.key === "Escape") show(false); });
     document.getElementById("chatForm").onsubmit = e => {
       e.preventDefault(); const i = document.getElementById("chatIn"), txt = i.value.trim(); if (!txt) return;
-      i.value = ""; P().collection("chat").add({ name: me.name, colour: me.colour, text: txt.slice(0, 1000), t: Date.now(), scene: App.cur.scene || null }).catch(() => toast("Message not sent"));
+      i.value = ""; P().collection("chat").add({ name: me.name, colour: me.colour, text: txt.slice(0, 5000), t: Date.now(), scene: App.cur.scene || null }).catch(() => toast("Message not sent"));
       log("chat", "");
     };
+    const ci = document.getElementById("chatIn");
+    ci.addEventListener("input", () => { ci.style.height = "auto"; ci.style.height = Math.min(ci.scrollHeight, 160) + "px"; });
+    ci.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); document.getElementById("chatForm").requestSubmit(); setTimeout(() => ci.style.height = "auto", 0); } });
     unsubs.push(P().collection("chat").orderBy("t", "desc").limit(80).onSnapshot(q => {
       chatMsgs = []; q.forEach(d => chatMsgs.push(d.data())); chatMsgs.reverse();
       const box = document.getElementById("msgs");
-      box.innerHTML = chatMsgs.map(m => `<div class="m"><b style="color:${esc(m.colour)}">${esc(m.name)}</b><small>${new Date(m.t).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}${m.scene ? " · Sc " + esc(m.scene) : ""}</small><div>${esc(m.text)}</div></div>`).join("") || `<p class="hint">No messages yet. Say hi to the crew.</p>`;
+      box.innerHTML = chatMsgs.map(m => `<div class="m"><b style="color:${esc(m.colour)}">${esc(m.name)}</b><small>${new Date(m.t).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}${m.scene ? " · Sc " + esc(m.scene) : ""}</small><div style="white-space:pre-wrap">${esc(m.text)}</div></div>`).join("") || `<p class="hint">No messages yet. Say hi to the crew.</p>`;
       box.scrollTop = box.scrollHeight;
       if (panel.style.display === "flex") markSeen(); else document.getElementById("chatDot").hidden = !chatMsgs.some(m => m.t > chatSeen && m.name !== me.name);
     }));
