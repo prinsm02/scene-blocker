@@ -175,3 +175,4 @@ textarea{min-height:76px;resize:vertical}
 @media (max-width:900px){.tools{max-height:none;max-width:calc(100% - 24px);overflow-x:auto;overflow-y:hidden}}
 .hl{display:flex;gap:6px;align-items:center;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:4px;color:var(--text);cursor:pointer;font-size:12px}.hl i{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 #chatIn{resize:none;font:inherit;min-height:36px;max-height:160px}
+#chatIn{max-height:300px;line-height:1.45}.chat{height:520px;max-height:80vh}.chat form{align-items:flex-end}

@@ -200,7 +200,7 @@ window.Sync = (() => {
       log("chat", "");
     };
     const ci = document.getElementById("chatIn");
-    ci.addEventListener("input", () => { ci.style.height = "auto"; ci.style.height = Math.min(ci.scrollHeight, 160) + "px"; });
+    ci.addEventListener("input", () => { ci.style.height = "auto"; ci.style.height = Math.min(ci.scrollHeight, 300) + "px"; });
     ci.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); document.getElementById("chatForm").requestSubmit(); setTimeout(() => ci.style.height = "auto", 0); } });
     unsubs.push(P().collection("chat").orderBy("t", "desc").limit(80).onSnapshot(q => {
       chatMsgs = []; q.forEach(d => chatMsgs.push(d.data())); chatMsgs.reverse();
