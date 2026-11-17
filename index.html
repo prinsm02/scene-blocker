@@ -23,7 +23,7 @@
   <h1>Scene Blocker</h1>
   <p class="tag">Block it. Shoot it.</p>
   <div class="bar"><i></i></div>
-  <p class="meta">Version <span id="ver">1.1.1</span><br>Developed by Matthew Prins<br>Born 16 November 2026</p>
+  <p class="meta">Version <span id="ver">1.2.0</span><br>Developed by Matthew Prins<br>Born 16 November 2026</p>
 </div>
 <header class="top">
   <div class="brand"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Scene Blocker</span></div>
@@ -31,6 +31,9 @@
   <div class="title" id="sceneTitle">Import a script to start</div>
   <div class="tabs" id="setupTabs"></div>
   <div class="spacer"></div>
+  <button class="icon-btn" id="btnChat" title="Crew chat" hidden>&#128172;<i id="chatDot" hidden></i></button>
+  <button class="icon-btn" id="btnSettings" title="Settings and shortcuts (?)">&#9881;</button>
+  <span id="savedTag" class="saved" hidden>Saved</span>
   <button class="btn" id="btnExport" title="Save this setup as a picture">Export</button>
 </header>
 
@@ -59,7 +62,11 @@
         <button data-tool="char" title="Place a character">&#9679;<small>Character</small></button>
         <button data-tool="cam" title="Place a camera">&#9635;<small>Camera</small></button>
         <button data-tool="line180" title="Draw the 180 line">&#8943;<small>180 line</small></button>
-        <button data-tool="gear" title="Lights, grip, VT and vehicles">&#9733;<small>Gear</small></button>
+        <button data-tool="gear" title="Lights, grip, power, VT and vehicles">&#9733;<small>Gear</small></button>
+        <button data-tool="props" title="Props (bonfire, ihadi...)">&#9832;<small>Props</small></button>
+        <button data-tool="track" title="Dolly track, straight or curved">&#9552;<small>Track</small></button>
+        <button data-tool="cable" title="Extension cable (right angles)">&#8988;<small>Cable</small></button>
+        <button data-tool="shape" title="Your own labelled shape">&#9634;<small>Shape</small></button>
         <span class="sep"></span>
         <button data-act="undo" title="Undo (Ctrl+Z)">&#8630;<small>Undo</small></button>
         <button data-act="redo" title="Redo (Ctrl+Shift+Z)">&#8631;<small>Redo</small></button>
@@ -83,6 +90,8 @@
 </footer>
 
 <div class="toast" id="toast" hidden></div>
+<div class="chat" id="chat" hidden><div class="ch"><b>Crew chat</b><button class="link" id="chatClose">Close</button></div><div class="msgs" id="msgs"></div><form id="chatForm"><input id="chatIn" type="text" placeholder="Message the crew" autocomplete="off"><button class="btn red small">Send</button></form></div>
+<div class="marquee" id="marquee" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="config.js"></script>
 <script>

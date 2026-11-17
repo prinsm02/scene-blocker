@@ -73,6 +73,7 @@ window.Sync = (() => {
       await pushAll(); toast("Crew started. Share your invite link from the crew button.");
     }
     live = true; badge("Live · " + code, true);
+    startChat(); startLog(); log("login", "");
     unsubs.push(P().onSnapshot(s => { if (s.exists && !s.metadata.hasPendingWrites) App.applyRemote(s.data().prod, null); }));
     unsubs.push(P().collection("plans").onSnapshot(q => {
       const add = {}; q.docChanges().forEach(ch => { if (ch.type !== "removed") add[ch.doc.id] = ch.doc.data(); });
@@ -138,7 +139,7 @@ window.Sync = (() => {
     let r = document.getElementById("roster");
     if (!r) { r = el(`<div id="roster" class="roster"></div>`); document.querySelector(".top .spacer").after(r); }
     const list = [me, ...Object.values(people)];
-    r.innerHTML = list.slice(0, 6).map(p => `<span class="av" style="background:${p.colour}" title="${esc(p.name)}${p.scene ? " · on Sc " + esc(p.scene) : ""}">${esc((p.name || "?").trim().slice(0, 2).toUpperCase())}</span>`).join("") + (list.length > 6 ? `<span class="av more">+${list.length - 6}</span>` : "");
+    r.innerHTML = list.slice(0, 6).map(p => `<span class="av" style="background:${p.colour}" data-name="${esc(p.name)}${p === me ? " (you)" : ""}${p.scene ? " · Sc " + esc(p.scene) : ""}" title="${esc(p.name)}${p.scene ? " · on Sc " + esc(p.scene) : ""}">${esc((p.name || "?").trim().slice(0, 2).toUpperCase())}</span>`).join("") + (list.length > 6 ? `<span class="av more">+${list.length - 6}</span>` : "");
   }
   function badge(t, clickable) {
     let b = document.getElementById("liveBadge");
@@ -171,6 +172,56 @@ window.Sync = (() => {
   }
   function toast(t) { const e = document.getElementById("toast"); if (!e) return; e.textContent = t; e.hidden = false; setTimeout(() => e.hidden = true, 3500); }
 
+
+  // ---------- crew chat (prods/{code}/chat) ----------
+  let chatSeen = +(localStorage.getItem("sb-chat-seen") || 0), chatMsgs = [];
+  function startChat() {
+    const btn = document.getElementById("btnChat"), panel = document.getElementById("chat"); if (!btn) return;
+    btn.hidden = false;
+    btn.onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) { markSeen(); document.getElementById("chatIn").focus(); } };
+    document.getElementById("chatClose").onclick = () => panel.hidden = true;
+    document.getElementById("chatForm").onsubmit = e => {
+      e.preventDefault(); const i = document.getElementById("chatIn"), txt = i.value.trim(); if (!txt) return;
+      i.value = ""; P().collection("chat").add({ name: me.name, colour: me.colour, text: txt.slice(0, 1000), t: Date.now(), scene: App.cur.scene || null }).catch(() => toast("Message not sent"));
+      log("chat", "");
+    };
+    unsubs.push(P().collection("chat").orderBy("t", "desc").limit(80).onSnapshot(q => {
+      chatMsgs = []; q.forEach(d => chatMsgs.push(d.data())); chatMsgs.reverse();
+      const box = document.getElementById("msgs");
+      box.innerHTML = chatMsgs.map(m => `<div class="m"><b style="color:${esc(m.colour)}">${esc(m.name)}</b><small>${new Date(m.t).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}${m.scene ? " · Sc " + esc(m.scene) : ""}</small><div>${esc(m.text)}</div></div>`).join("") || `<p class="hint">No messages yet. Say hi to the crew.</p>`;
+      box.scrollTop = box.scrollHeight;
+      if (!panel.hidden) markSeen(); else document.getElementById("chatDot").hidden = !chatMsgs.some(m => m.t > chatSeen && m.name !== me.name);
+    }));
+  }
+  function markSeen() { chatSeen = Date.now(); localStorage.setItem("sb-chat-seen", chatSeen); document.getElementById("chatDot").hidden = true; }
+
+  // ---------- developer activity log (prods/{code}/devlog/{session}) ----------
+  // One document per visit: who, when they arrived, last activity, what they did. Shown only with ?dev.
+  const session = { id: Date.now().toString(36) + me.id, start: Date.now(), acts: [], dirty: false };
+  function log(a, d) { if (!live) return; session.acts.push({ t: Date.now(), a, d: String(d || "").slice(0, 80) }); if (session.acts.length > 400) session.acts.shift(); session.dirty = true; }
+  function flushLog(force) {
+    if (!live || (!session.dirty && !force)) return;
+    session.dirty = false;
+    P().collection("devlog").doc(session.id).set({ name: me.name, start: session.start, last: Date.now(), acts: session.acts, ua: navigator.userAgent.slice(0, 120) }).catch(() => {});
+  }
+  function startLog() { flushLog(true); setInterval(() => flushLog(false), 60000); window.addEventListener("pagehide", () => flushLog(true)); document.addEventListener("visibilitychange", () => { if (document.hidden) flushLog(true); }); }
+  async function showLog() {
+    if (!live) return toast("Join the crew first");
+    const q = await P().collection("devlog").orderBy("start", "desc").limit(150).get().catch(() => null);
+    const rows = []; if (q) q.forEach(d => rows.push(d.data()));
+    const mins = r => Math.max(1, Math.round((r.last - r.start) / 60000));
+    const byName = {}; rows.forEach(r => { const b = byName[r.name] ||= { n: 0, m: 0 }; b.n++; b.m += mins(r); });
+    const box = el(`<div class="modal"><div class="card wide"><h2>Activity log (developer)</h2>
+      <p class="hint">Totals: ${Object.entries(byName).map(([n, b]) => `${esc(n)} ${b.n} visit${b.n > 1 ? "s" : ""}, ${b.m} min`).join(" · ") || "none yet"}</p>
+      <div class="devlog"><table><tr><th>Who</th><th>When</th><th>Time</th><th>What they did</th></tr>${rows.map(r => {
+        const c = {}; (r.acts || []).forEach(x => c[x.a] = (c[x.a] || 0) + 1);
+        const scenes = [...new Set((r.acts || []).filter(x => x.a === "scene").map(x => x.d))].slice(0, 12);
+        return `<tr><td>${esc(r.name)}</td><td>${new Date(r.start).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td><td>${mins(r)} min</td><td>${Object.entries(c).map(([k, v]) => k + " " + v).join(", ")}${scenes.length ? "<br><small>Sc " + scenes.map(esc).join(", ") + "</small>" : ""}</td></tr>`;
+      }).join("")}</table></div><button class="btn red" data-a="x">Close</button></div></div>`);
+    box.onclick = e => { if (e.target.dataset.a === "x" || e.target === box) box.remove(); };
+    document.body.appendChild(box);
+  }
+
   window.addEventListener("load", () => setTimeout(start, 100));
-  return { get live() { return live; }, get code() { return code; }, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
+  return { get live() { return live; }, get code() { return code; }, log, showLog, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
 })();

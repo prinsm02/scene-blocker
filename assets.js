@@ -8,7 +8,10 @@ const Assets = (() => {
     practical: { name: "Practical lamp", draw: s => `<circle r="${.95*s}" fill="#FFE9A8" opacity=".14"/><circle r="${.5*s}" fill="#E8DCC2" stroke="#B8A780" stroke-width="${.05*s}"/><circle r="${.15*s}" fill="#FFC857"/>` },
     sun: { name: "Sun / moon", draw: s => `${[0,45,90,135,180,225,270,315].map(a=>`<line x1="0" y1="${-.5*s}" x2="0" y2="${-.7*s}" stroke="#FFC857" stroke-width="${.07*s}" stroke-linecap="round" transform="rotate(${a})"/>`).join("")}<circle r="${.36*s}" fill="#FFC857"/><line x1="${.85*s}" y1="0" x2="${2.8*s}" y2="0" stroke="#FFC857" stroke-width="${.06*s}" stroke-dasharray="${.05*s} ${.18*s}" stroke-linecap="round"/>` },
     reflector: { name: "Reflector", draw: s => `<ellipse rx="${.9*s}" ry="${.36*s}" fill="#D9DDE4" stroke="#8A919E" stroke-width="${.05*s}" transform="rotate(90)"/>` },
-    dolly: { name: "Dolly track", draw: s => `<path d="M${-2*s} ${-.28*s} H${2*s} M${-2*s} ${.28*s} H${2*s}" stroke="#A9AFBD" stroke-width="${.08*s}"/>${[-1.8,-1.2,-.6,0,.6,1.2,1.8].map(x=>`<line x1="${x*s}" y1="${-.42*s}" x2="${x*s}" y2="${.42*s}" stroke="#A9AFBD" stroke-width="${.06*s}"/>`).join("")}` },
+    generator: { name: "Generator", draw: s => `<rect x="${-.9*s}" y="${-.6*s}" width="${1.8*s}" height="${1.2*s}" rx="${.12*s}" fill="#3A3F4C" stroke="#FFC857" stroke-width="${.06*s}"/><path d="M${.1*s} ${-.4*s} L${-.25*s} ${.05*s} H${.05*s} L${-.1*s} ${.4*s} L${.3*s} ${-.08*s} H0Z" fill="#FFC857"/><text y="${.95*s}" text-anchor="middle" font-size="${.3*s}" fill="${TXT}">GENNY</text>` },
+    bonfire: { name: "Bonfire", cat: "Props", draw: s => `<circle r="${1*s}" fill="#FF8A3D" opacity=".18"/>${[0,60,120,180,240,300].map(a=>`<rect x="${-.08*s}" y="${-.75*s}" width="${.16*s}" height="${.6*s}" rx="${.05*s}" fill="#6B4A2B" transform="rotate(${a})"/>`).join("")}<path d="M0 ${-.45*s} Q${.35*s} ${-.05*s} ${.2*s} ${.3*s} Q0 ${.45*s} ${-.2*s} ${.3*s} Q${-.35*s} ${-.05*s} 0 ${-.45*s}Z" fill="#FF8A3D"/><circle r="${.14*s}" fill="#FFE08A"/>` },
+    ihadi: { name: "Ihadi (bow)", cat: "Props", draw: s => `<path d="M${-1.1*s} ${-.15*s} Q0 ${-.75*s} ${1.1*s} ${-.15*s}" fill="none" stroke="#B07A45" stroke-width="${.12*s}" stroke-linecap="round"/><line x1="${-1.1*s}" y1="${-.15*s}" x2="${1.1*s}" y2="${-.15*s}" stroke="#E8DCC2" stroke-width="${.03*s}"/><circle cx="${-.35*s}" cy="${.12*s}" r="${.28*s}" fill="#C9A26B" stroke="#7A5530" stroke-width="${.04*s}"/>` },
+    dolly: { name: "Dolly track", draw: s => `<rect x="${-2.1*s}" y="${-.5*s}" width="${4.2*s}" height="${1*s}" fill="transparent"/><path d="M${-2*s} ${-.28*s} H${2*s} M${-2*s} ${.28*s} H${2*s}" stroke="#A9AFBD" stroke-width="${.08*s}"/>${[-1.8,-1.2,-.6,0,.6,1.2,1.8].map(x=>`<line x1="${x*s}" y1="${-.42*s}" x2="${x*s}" y2="${.42*s}" stroke="#A9AFBD" stroke-width="${.06*s}"/>`).join("")}` },
     slider: { name: "Slider", draw: s => `<rect x="${-1.6*s}" y="${-.12*s}" width="${3.2*s}" height="${.24*s}" rx="${.06*s}" fill="#6B7280"/><path d="M${-1.6*s} ${-.35*s} V${.35*s} M${1.6*s} ${-.35*s} V${.35*s}" stroke="#A9AFBD" stroke-width="${.1*s}" stroke-linecap="round"/><rect x="${-.38*s}" y="${-.3*s}" width="${.76*s}" height="${.6*s}" rx="${.08*s}" fill="#A9AFBD"/><rect x="${-.22*s}" y="${-.2*s}" width="${.44*s}" height="${.4*s}" rx="${.06*s}" fill="${RED}"/>` },
     boom: { name: "Boom mic", draw: s => `<line x1="${-1.4*s}" y1="0" x2="${1.1*s}" y2="0" stroke="#A9AFBD" stroke-width="${.08*s}"/><circle cx="${-1.4*s}" r="${.13*s}" fill="#6B7280"/><rect x="${1*s}" y="${-.18*s}" width="${.8*s}" height="${.36*s}" rx="${.18*s}" fill="#3A3F4C" stroke="#A9AFBD" stroke-width="${.04*s}"/>` },
     vt: { name: "VT Station", draw: s => `<rect x="${-1.1*s}" y="${-.6*s}" width="${2.2*s}" height="${1.1*s}" rx="${.08*s}" fill="${PANEL}" stroke="#A9AFBD" stroke-width="${.05*s}"/><text y="${.12*s}" text-anchor="middle" font-size="${.42*s}" font-weight="600" fill="${TXT}">VT</text><path d="M0 ${.5*s} V${.75*s} M${-.4*s} ${.78*s} H${.4*s}" stroke="#A9AFBD" stroke-width="${.08*s}" stroke-linecap="round"/>` },
@@ -22,7 +25,7 @@ const Assets = (() => {
     return `<rect x="${-.6*s}" y="${-.45*s}" width="${1*s}" height="${.9*s}" rx="${.14*s}" fill="${RED}"/><path d="M${.4*s} ${-.25*s} L${.75*s} ${-.48*s} L${.75*s} ${.48*s} L${.4*s} ${.25*s}Z" fill="${RED2}"/><g transform="rotate(${-(it.rot || 0)} ${-.1*s} 0)"><text x="${-.1*s}" y="${.13*s}" text-anchor="middle" font-size="${.36*s}" font-weight="700" fill="#fff">${esc(it.label)}</text></g>${lens}`;
   }
   function character(it, s, colour) {
-    return `<circle r="${.55*s}" fill="${colour}" stroke="#1A1D24" stroke-width="${.05*s}"/><text y="${.17*s}" text-anchor="middle" font-size="${.44*s}" font-weight="700" fill="#14161B">${esc(it.label)}</text>`;
+    return `<circle r="${.55*s}" fill="${colour}" stroke="#1A1D24" stroke-width="${.05*s}"/><text y="${.17*s}" text-anchor="middle" font-size="${(String(it.label).length > 2 ? .34 : .44)*s}" font-weight="700" fill="#14161B">${esc(it.label)}</text>`;
   }
   // Small swatch for the picker buttons.
   function icon(kind) {
@@ -30,5 +33,17 @@ const Assets = (() => {
     const body = GEAR[kind] ? GEAR[kind].draw(s) : "";
     return `<svg width="34" height="22" viewBox="-30 -20 70 40">${body}</svg>`;
   }
-  return { GEAR, camera, character, icon, RED, esc };
+  function shapeIcon(k) {
+    const b = k === "rect" ? `<rect x="-14" y="-10" width="28" height="20" rx="3" fill="none" stroke="#ECEEF3" stroke-width="3"/>` : k === "circle" ? `<circle r="12" fill="none" stroke="#ECEEF3" stroke-width="3"/>` : `<text y="7" text-anchor="middle" font-size="20" font-weight="700" fill="#ECEEF3">Aa</text>`;
+    return `<svg width="34" height="22" viewBox="-30 -20 70 40">${b}</svg>`;
+  }
+  // User shape with its own label.
+  function shape(it, s) {
+    const w = s * 1.6 * (it.size || 1), h = it.shape === "rect" ? w * .65 : w, col = it.colour || "#ECEEF3";
+    const body = it.shape === "rect" ? `<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="${s*.08}" fill="${col}" fill-opacity=".18" stroke="${col}" stroke-width="${s*.06}"/>`
+      : it.shape === "circle" ? `<circle r="${w/2}" fill="${col}" fill-opacity=".18" stroke="${col}" stroke-width="${s*.06}"/>`
+      : `<rect x="${-w/2}" y="${-s*.3}" width="${w}" height="${s*.6}" fill="transparent"/>`;
+    return body + `<text y="${s*.12}" text-anchor="middle" font-size="${s*.34*(it.size||1)}" font-weight="600" fill="#fff" stroke="#14161B" stroke-width="${s*.06}" paint-order="stroke">${esc(it.note || (it.shape === "label" ? "Label" : ""))}</text>`;
+  }
+  return { GEAR, camera, character, icon, shapeIcon, shape, RED, esc };
 })();

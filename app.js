@@ -12,11 +12,17 @@
   let blocks = {};          // sceneNumber -> [{id,name,items[],frames[],shotlist?}]
   let cur = { scene: null, setup: 0 }, tool = "select", pickVal = null, sel = null;
   let view = { x: 0, y: 0, w: 1000, h: 700 };
-  let drag = null, pending = null;
+  let drag = null, pending = null, multi = new Set(), clip = null, spaceDown = false;
   const undoStack = [], redoStack = [];
+  // Per-device display settings (sizes of marks, move dots, cable look).
+  const SET = Object.assign({ mark: 1, dot: 1, cable: .55 }, (() => { try { return JSON.parse(localStorage.getItem("sb-settings") || "{}"); } catch (e) { return {}; } })());
+  const saveSet = () => { try { localStorage.setItem("sb-settings", JSON.stringify(SET)); } catch (e) {} };
+  const isSel = id => sel === id || multi.has(id);
+  const LINES = ["line180", "track", "cable"];
+  const logAct = (a, d) => { if (window.Sync && Sync.log) Sync.log(a, d); };
 
   // ---------- persistence (device) + live sync ----------
-  const saveDevice = debounce(async () => { if (!prod) return; await Store.set("prod", prod); await Store.set("blocks", blocks); }, 500);
+  const saveDevice = debounce(async () => { if (!prod) return; await Store.set("prod", prod); await Store.set("blocks", blocks); const t = document.getElementById("savedTag"); if (t) { t.hidden = false; t.textContent = "Saved " + new Date().toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }); } }, 500);
   const pushScene = debounce(num => { if (live()) Sync.pushScene(num, blocks[num]); }, 350);
   function save() { saveDevice(); if (cur.scene) pushScene(cur.scene); }
   function debounce(f, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; }
@@ -57,9 +63,11 @@
     const img = await shrink(f, 1800, .82, 900000);
     const id = uid();
     prod.plans[id] = Object.assign({ name }, img);
-    const loc = sceneObj()?.location; if (loc) prod.locPlans[loc] = id;
+    const loc = sceneObj()?.location, st = setupObj();
+    if (st) st.plan = id;
+    if (loc && !prod.locPlans[loc]) prod.locPlans[loc] = id;
     if (live()) { Sync.pushPlan(id, prod.plans[id]); Sync.pushProduction(prod); }
-    saveDevice(); renderAll(); fit();
+    save(); renderAll(); fit();
   };
   $("inFrames").onchange = async e => {
     const files = [...e.target.files]; e.target.value = "";
@@ -98,7 +106,9 @@
   const sceneObj = () => prod?.scenes.find(s => s.number === cur.scene);
   const setups = () => blocks[cur.scene] || (blocks[cur.scene] = [newSetup(1)]);
   const setupObj = () => cur.scene ? setups()[Math.min(cur.setup, setups().length - 1)] : null;
-  const planObj = () => { const s = sceneObj(); const id = s && prod.locPlans[s.location]; return id ? prod.plans[id] : null; };
+  // A setup can have its own floor plan; otherwise it uses the location's plan.
+  const planId = () => { const s = sceneObj(), st = setupObj(); return (st && st.plan && prod.plans[st.plan]) ? st.plan : (s && prod.locPlans[s.location]); };
+  const planObj = () => { const id = prod && planId(); return id ? prod.plans[id] : null; };
   const charOf = name => prod.characters.find(c => c.name === name) || { name, letter: "?", colour: "#ccc" };
   const scale = () => { const p = planObj(); return p ? Math.max(p.w, p.h) / 1400 : 1; };
   function nextNumber(kind, ref) { return setupObj().items.filter(i => i.kind === kind && i.ref === ref).reduce((m, i) => Math.max(m, i.n), 0) + 1; }
@@ -126,16 +136,23 @@
       ol.appendChild(li);
     });
   }
-  function go(scene, setup) { cur.scene = scene; cur.setup = setup; sel = null; $("left").classList.remove("open"); renderAll(); fit(); announce(); }
+  function go(scene, setup) { cur.scene = scene; cur.setup = setup; sel = null; multi.clear(); logAct("scene", scene); $("left").classList.remove("open"); renderAll(); fit(); announce(); }
   $("search").oninput = renderScenes;
   function renderPlanPick() {
     const s = sceneObj(), sel_ = $("planPick");
     $("locName").textContent = s ? s.location : "this location";
     sel_.innerHTML = `<option value="">Choose a floor plan...</option>` + (prod ? Object.entries(prod.plans).map(([id, p]) => `<option value="${id}">${esc(p.name)}</option>`).join("") : "");
-    sel_.value = s && prod.locPlans[s.location] || "";
+    sel_.value = s && planId() || "";
     sel_.disabled = !s;
   }
-  $("planPick").onchange = e => { const s = sceneObj(); if (!s) return; if (e.target.value) prod.locPlans[s.location] = e.target.value; else delete prod.locPlans[s.location]; if (live()) Sync.pushProduction(prod); saveDevice(); draw(); fit(); renderScenes(); };
+  // Changing the plan changes THIS setup only. The location default is set only if it has none yet.
+  $("planPick").onchange = e => {
+    const s = sceneObj(), st = setupObj(); if (!s || !st) return;
+    const v = e.target.value;
+    if (v) { st.plan = v; if (!prod.locPlans[s.location]) { prod.locPlans[s.location] = v; if (live()) Sync.pushProduction(prod); } }
+    else delete st.plan;
+    save(); draw(); fit(); renderScenes(); logAct("plan", s.number + " " + st.name);
+  };
   function renderTabs() {
     const box = $("setupTabs"); box.innerHTML = "";
     if (!cur.scene) return;
@@ -146,7 +163,7 @@
       box.appendChild(b);
     });
     const add = document.createElement("button"); add.textContent = "+"; add.title = "New setup (copies this setup's marks)";
-    add.onclick = () => { const src = setupObj(); const st = newSetup(setups().length + 1); st.items = JSON.parse(JSON.stringify(src.items)).map(i => Object.assign(i, { id: uid() })); setups().push(st); cur.setup = setups().length - 1; save(); renderAll(); toast(st.name + " added (marks copied)"); };
+    add.onclick = () => { const src = setupObj(); const st = newSetup(setups().length + 1); if (src.plan) st.plan = src.plan; st.items = JSON.parse(JSON.stringify(src.items)).map(i => Object.assign(i, { id: uid() })); setups().push(st); cur.setup = setups().length - 1; save(); renderAll(); toast(st.name + " added (marks copied)"); };
     box.appendChild(add);
     $("boardSetup").textContent = setupObj() ? "· " + setupObj().name : "";
   }
@@ -177,30 +194,53 @@
     renderPick();
   };
   function renderPick() {
-    const box = $("pick"); box.innerHTML = ""; box.classList.toggle("show", ["char", "cam", "gear", "line180"].includes(tool));
+    const box = $("pick"); box.innerHTML = ""; box.classList.toggle("show", ["char", "cam", "gear", "props", "line180", "track", "cable", "shape"].includes(tool));
     const opts = [];
     if (tool === "char" && prod) {
       const cast = sceneObj()?.characters.length ? sceneObj().characters : prod.characters.map(c => c.name);
       cast.forEach(n => { const c = charOf(n); opts.push({ v: n, html: `<span class="dot" style="background:${c.colour}">${esc(c.letter)}</span>${esc(n)}` }); });
+      opts.push({ v: "__add", html: `<span class="dot add">+</span>Add character` });
     }
     if (tool === "cam") ["A", "B", "C", "D"].forEach(l => opts.push({ v: l, html: `<span class="dot cam">${l}</span>${l} cam` }));
-    if (tool === "gear") Object.entries(Assets.GEAR).forEach(([k, g]) => opts.push({ v: k, html: Assets.icon(k) + g.name }));
+    if (tool === "gear" || tool === "props") Object.entries(Assets.GEAR).filter(([k, g]) => (g.cat === "Props") === (tool === "props")).forEach(([k, g]) => opts.push({ v: k, html: Assets.icon(k) + g.name }));
+    if (tool === "shape") [["rect", "Box"], ["circle", "Circle"], ["label", "Text label"]].forEach(([v, n]) => opts.push({ v, html: Assets.shapeIcon(v) + n }));
     if (!pickVal && opts.length) pickVal = opts[0].v;
-    opts.forEach(o => { const b = document.createElement("button"); b.innerHTML = o.html; if (o.v === pickVal) b.className = "on"; b.onclick = () => { pickVal = o.v; renderPick(); }; box.appendChild(b); });
-    const hint = { char: "Tap the plan to place their next position. A1 → A2 joins with a dotted line.", cam: "Tap the plan to place the camera. Tap again for its move (A1 → A2).", gear: "Tap the plan to place it.", line180: "Drag across the plan to draw the 180 line." }[tool];
+    opts.forEach(o => { const b = document.createElement("button"); b.innerHTML = o.html; if (o.v === pickVal) b.className = "on"; b.onclick = () => { if (o.v === "__add") return addCharacter(); pickVal = o.v; renderPick(); }; box.appendChild(b); });
+    const hint = { char: "Tap the plan to place their next position. A1 → A2 joins with a dotted line; select a mark and drag the small diamond to bend the move.", cam: "Tap the plan to place the camera. Tap again for its move (A1 → A2). Drag the diamond to bend it.", gear: "Tap the plan to place it.", props: "Tap the plan to place it.", line180: "Drag across the plan to draw the 180 line.", track: "Drag to lay track. Select it: drag the ends, drag the middle diamond to curve it, drag the rails to move it.", cable: "Drag from the power to the light. The cable runs at right angles.", shape: "Tap the plan to place a shape, then type its label on the right." }[tool];
     if (hint) box.insertAdjacentHTML("beforeend", `<span class="hint">${hint}</span>`);
   }
 
   // ---------- drawing ----------
   function markSvg(it) {
-    const s = S * scale();
+    const base = S * scale();
+    const s = (it.kind === "char" || it.kind === "cam") ? base * SET.mark * (it.size || 1) : base;
     let body;
     if (it.kind === "cam") body = Assets.camera(it, s);
     else if (it.kind === "char") body = Assets.character(it, s, charOf(it.ref).colour);
+    else if (it.kind === "shape") body = Assets.shape(it, s);
     else body = (Assets.GEAR[it.ref] || Assets.GEAR.practical).draw(s * (it.size || 1));
     const unplaced = it.unplaced ? `<circle r="${s * .95}" fill="none" stroke="#FFC857" stroke-width="${s * .05}" stroke-dasharray="${s * .14} ${s * .1}" class="unplaced"/>` : "";
-    const ring = sel === it.id ? `<circle r="${s * .95}" fill="none" stroke="#fff" stroke-width="${s * .04}" stroke-dasharray="${s * .12} ${s * .1}"/><line x1="${s * .95}" y1="0" x2="${s * 1.15}" y2="0" stroke="#fff" stroke-width="${s * .04}"/><circle class="rot" cx="${s * 1.35}" cy="0" r="${s * .22}" fill="#fff" stroke="${Assets.RED}" stroke-width="${s * .05}"/>` : "";
+    const ring = isSel(it.id) ? `<circle r="${s * .95}" fill="none" stroke="#fff" stroke-width="${s * .04}" stroke-dasharray="${s * .12} ${s * .1}"/><line x1="${s * .95}" y1="0" x2="${s * 1.15}" y2="0" stroke="#fff" stroke-width="${s * .04}"/><circle class="rot" cx="${s * 1.35}" cy="0" r="${s * .22}" fill="#fff" stroke="${Assets.RED}" stroke-width="${s * .05}"/>` : "";
     return `<g class="mark${it.unplaced ? " ghost" : ""}" data-id="${it.id}" transform="translate(${it.x} ${it.y}) rotate(${it.rot || 0})">${unplaced}${ring}${body}</g>`;
+  }
+  // Curve helpers: control point (cx, cy) on the later mark / line; handle sits on the curve midpoint.
+  const bendCtl = (a, b) => b.cx != null ? { x: (a.x + 2 * b.cx + b.x) / 4, y: (a.y + 2 * b.cy + b.y) / 4 } : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const bendPath = (a, b) => b.cx != null ? `M${a.x} ${a.y} Q${b.cx} ${b.cy} ${b.x} ${b.y}` : `M${a.x} ${a.y} L${b.x} ${b.y}`;
+  const setBend = (a, b, p) => { b.cx = 2 * p.x - (a.x + b.x) / 2; b.cy = 2 * p.y - (a.y + b.y) / 2; };
+  function lineSvg(l, s) {
+    const on = isSel(l.id), A = { x: l.x, y: l.y }, B = { x: l.x2, y: l.y2, cx: l.cx, cy: l.cy };
+    let d = l.kind === "cable" ? (l.flip ? `M${l.x} ${l.y} V${l.y2} H${l.x2}` : `M${l.x} ${l.y} H${l.x2} V${l.y2}`) : bendPath(A, B);
+    let body;
+    if (l.kind === "line180") body = `<path d="${d}" fill="none" stroke="${Assets.RED}" stroke-width="${s * .08}" stroke-dasharray="${s * .22} ${s * .18}"/>`;
+    else if (l.kind === "track") body = `<path d="${d}" fill="none" stroke="#A9AFBD" stroke-width="${s * .84}" stroke-dasharray="${s * .07} ${s * .5}"/><path d="${d}" fill="none" stroke="#A9AFBD" stroke-width="${s * .62}"/><path d="${d}" fill="none" stroke="#1A1D24" stroke-opacity=".9" stroke-width="${s * .46}"/>`;
+    else body = `<path d="${d}" fill="none" stroke="#000" stroke-opacity="${SET.cable}" stroke-width="${s * .07}" stroke-linejoin="round"/>`;
+    let h = "";
+    if (on) {
+      h = `<circle class="end1" cx="${l.x}" cy="${l.y}" r="${s * .18}" fill="#fff"/><circle class="end2" cx="${l.x2}" cy="${l.y2}" r="${s * .18}" fill="#fff"/>`;
+      if (l.kind !== "cable") { const c = bendCtl(A, B); h += `<rect class="bendl" x="${c.x - s * .16}" y="${c.y - s * .16}" width="${s * .32}" height="${s * .32}" fill="#fff" stroke="${Assets.RED}" stroke-width="${s * .05}" transform="rotate(45 ${c.x} ${c.y})"/>`; }
+      else h += `<path d="${d}" fill="none" stroke="#fff" stroke-width="${s * .03}" stroke-dasharray="${s * .1} ${s * .1}"/>`;
+    }
+    return `<g class="mark" data-id="${l.id}"><path d="${d}" fill="none" stroke="transparent" stroke-width="${s * (l.kind === "track" ? 1.1 : .6)}"/>${body}${h}</g>`;
   }
   function draw() {
     const p = planObj(), st = setupObj();
@@ -214,16 +254,20 @@
     Object.values(groups).forEach(g => {
       g.sort((a, b) => a.n - b.n);
       const col = g[0].kind === "cam" ? Assets.RED : charOf(g[0].ref).colour;
-      for (let k = 1; k < g.length; k++) out += `<line x1="${g[k - 1].x}" y1="${g[k - 1].y}" x2="${g[k].x}" y2="${g[k].y}" stroke="#14161B" stroke-opacity=".55" stroke-width="${s * .18}" stroke-linecap="round" stroke-dasharray="${s * .02} ${s * .2}"/><line x1="${g[k - 1].x}" y1="${g[k - 1].y}" x2="${g[k].x}" y2="${g[k].y}" stroke="${col}" stroke-width="${s * .11}" stroke-dasharray="${s * .02} ${s * .2}" stroke-linecap="round"/>`;
+      // Move lines: straight, or bent through the control point stored on the later mark (cx, cy).
+      const ds = s * SET.dot;
+      for (let k = 1; k < g.length; k++) {
+        const a = g[k - 1], b = g[k], d = bendPath(a, b);
+        out += `<path d="${d}" fill="none" stroke="#14161B" stroke-opacity=".55" stroke-width="${ds * .18}" stroke-linecap="round" stroke-dasharray="${ds * .02} ${ds * .2}"/><path d="${d}" fill="none" stroke="${col}" stroke-width="${ds * .11}" stroke-dasharray="${ds * .02} ${ds * .2}" stroke-linecap="round"/>`;
+        if (sel === b.id) { const c = bendCtl(a, b); out += `<rect class="bend" data-id="${b.id}" x="${c.x - s * .16}" y="${c.y - s * .16}" width="${s * .32}" height="${s * .32}" fill="#fff" stroke="${col}" stroke-width="${s * .05}" transform="rotate(45 ${c.x} ${c.y})"/>`; }
+      }
     });
-    st.items.filter(i => i.kind === "line180").forEach(l => {
-      out += `<g class="mark" data-id="${l.id}"><line x1="${l.x}" y1="${l.y}" x2="${l.x2}" y2="${l.y2}" stroke="transparent" stroke-width="${s * .6}"/><line x1="${l.x}" y1="${l.y}" x2="${l.x2}" y2="${l.y2}" stroke="${Assets.RED}" stroke-width="${s * .08}" stroke-dasharray="${s * .22} ${s * .18}"/>${sel === l.id ? `<circle class="end1" cx="${l.x}" cy="${l.y}" r="${s * .18}" fill="#fff"/><circle class="end2" cx="${l.x2}" cy="${l.y2}" r="${s * .18}" fill="#fff"/>` : ""}</g>`;
-    });
-    st.items.filter(i => i.kind === "gear").forEach(i => out += markSvg(i));
+    st.items.filter(i => LINES.includes(i.kind)).forEach(l => out += lineSvg(l, s));
+    st.items.filter(i => i.kind === "gear" || i.kind === "shape").forEach(i => out += markSvg(i));
     st.items.filter(i => i.kind === "cam" || i.kind === "char").forEach(i => out += markSvg(i));
     const sc = sceneObj(), d = new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
     const tbw = s * 5.4;
-    out += `<g class="tb" transform="translate(${p.w - tbw - s * .3} ${s * .3})"><rect width="${tbw}" height="${s * 1.95}" rx="${s * .12}" fill="#F4F2EC" opacity=".94"/><rect width="${s * .12}" height="${s * 1.95}" fill="${Assets.RED}"/><text x="${s * .35}" y="${s * .58}" font-size="${s * .36}" font-weight="700" fill="#1A1D24">SC ${esc(sc.number)} · ${esc(st.name)}</text><text x="${s * .35}" y="${s * 1.04}" font-size="${s * .29}" fill="#1A1D24">${esc(sc.location.replace(/^Mabuya Household - /, "").slice(0, 30))}</text><text x="${s * .35}" y="${s * 1.48}" font-size="${s * .27}" fill="#5A6070">${esc((sc.time || "").slice(0, 22))}  ·  ${d}</text></g>`;
+    out += `<g class="tb" transform="translate(${p.w - tbw - s * .3} ${s * .3})"><rect width="${tbw}" height="${s * 1.95}" rx="${s * .12}" fill="#F4F2EC" opacity=".94"/><rect width="${s * .12}" height="${s * 1.95}" fill="${Assets.RED}"/><text x="${s * .35}" y="${s * .58}" font-size="${s * .36}" font-weight="700" fill="#1A1D24">SC ${esc(sc.number)} · ${esc(st.name)}</text><text x="${s * .35}" y="${s * 1.04}" font-size="${s * .29}" fill="#1A1D24">${esc(sc.location.replace(/^.* - /, "").slice(0, 30))}</text><text x="${s * .35}" y="${s * 1.48}" font-size="${s * .27}" fill="#5A6070">${esc((sc.time || "").slice(0, 22))}  ·  ${d}</text></g>`;
     out += `<g id="cursors"></g>`;
     svg.innerHTML = out;
     setView();
@@ -243,36 +287,63 @@
   window.addEventListener("resize", debounce(fit, 150));
   function pt(e) { const r = svg.getBoundingClientRect(); return { x: view.x + (e.clientX - r.left) / r.width * view.w, y: view.y + (e.clientY - r.top) / r.height * view.h }; }
 
-  // ---------- pointer: place, drag, rotate, pan, pinch ----------
+  // ---------- pointer: place, drag, rotate, bend, pan, pinch, marquee ----------
+  // Mouse: left = select / drag (empty space = box select), right = options menu, middle or Space+drag = pan, wheel = zoom.
   const pointers = new Map();
+  const touchy = e => e.pointerType === "touch" || e.pointerType === "pen";
+  svg.addEventListener("contextmenu", e => e.preventDefault());
   svg.addEventListener("pointerdown", e => {
     if (!setupObj() || !planObj()) return;
+    closeMenus();
     try { svg.setPointerCapture(e.pointerId); } catch (er) {} pointers.set(e.pointerId, e);
     if (pointers.size === 2) { drag = { pinch: true, d0: dist(), v0: { ...view } }; return; }
     const p = pt(e), st = setupObj(), m = e.target.closest(".mark");
-    if (tool === "line180") { snapshot(); const l = { id: uid(), kind: "line180", x: p.x, y: p.y, x2: p.x, y2: p.y }; st.items.push(l); sel = l.id; drag = { line: l, end: 2 }; draw(); return; }
-    if ((tool === "char" || tool === "cam" || tool === "gear") && !m) {
+    if (e.button === 1 || spaceDown) { e.preventDefault(); drag = { pan: true, sx: e.clientX, sy: e.clientY, v0: { ...view } }; return; }
+    if (e.button === 2) {
+      if (m) { const id = m.dataset.id; if (!isSel(id)) { sel = id; multi.clear(); } draw(); renderProps(); }
+      return ctxMenu(e, m ? st.items.find(i => i.id === m.dataset.id) : null);
+    }
+    if (e.target.classList.contains("bend")) {
+      const b = st.items.find(i => i.id === e.target.dataset.id), a = st.items.filter(i => i.kind === b.kind && i.ref === b.ref && i.n < b.n).sort((x, y) => y.n - x.n)[0];
+      if (a) { snapshot(); drag = { bend: [a, b] }; } return;
+    }
+    if (LINES.includes(tool) && !m) {
+      snapshot(); const l = { id: uid(), kind: tool, x: p.x, y: p.y, x2: p.x, y2: p.y }; st.items.push(l); sel = l.id; multi.clear(); drag = { line: l, end: 2, fresh: true }; draw(); return;
+    }
+    if (["char", "cam", "gear", "props", "shape"].includes(tool) && !m) {
       if (!pickVal) return toast("Pick who or what to place first");
+      if (pickVal === "__add") return addCharacter();
       snapshot();
       let it;
-      if (tool === "gear") it = { id: uid(), kind: "gear", ref: pickVal, x: p.x, y: p.y, rot: 0, size: 1 };
+      if (tool === "gear" || tool === "props") it = { id: uid(), kind: "gear", ref: pickVal, x: p.x, y: p.y, rot: 0, size: 1 };
+      else if (tool === "shape") it = { id: uid(), kind: "shape", shape: pickVal, x: p.x, y: p.y, rot: 0, size: 1, colour: "#ECEEF3", note: pickVal === "label" ? "Label" : "" };
       else {
         const n = nextNumber(tool, pickVal);
         const letter = tool === "cam" ? pickVal : charOf(pickVal).letter;
         const prev = st.items.filter(i => i.kind === tool && i.ref === pickVal).sort((a, b) => b.n - a.n)[0];
-        it = { id: uid(), kind: tool, ref: pickVal, n, label: letter + n, x: p.x, y: p.y, rot: prev ? prev.rot : (tool === "cam" ? -90 : 0), lens: prev?.lens || (tool === "cam" ? "35mm" : ""), shot: prev?.shot || "", height: prev?.height || "", move: prev?.move || "", note: "" };
+        it = { id: uid(), kind: tool, ref: pickVal, n, label: letter + n, x: p.x, y: p.y, rot: prev ? prev.rot : (tool === "cam" ? -90 : 0), lens: prev?.lens || (tool === "cam" ? "35mm" : ""), shot: prev?.shot || "", height: prev?.height || "", move: prev?.move || "", note: "", size: prev?.size || 1 };
       }
-      st.items.push(it); sel = it.id; save(); draw(); renderProps(); return;
+      st.items.push(it); sel = it.id; multi.clear(); save(); draw(); renderProps(); logAct("add", it.kind + " " + (it.ref || it.shape)); return;
     }
     if (m) {
-      const it = st.items.find(i => i.id === m.dataset.id); sel = it.id; snapshot();
+      const it = st.items.find(i => i.id === m.dataset.id); snapshot();
+      if (e.shiftKey || e.ctrlKey) { if (isSel(it.id)) { multi.delete(it.id); if (sel === it.id) sel = null; } else { if (sel) multi.add(sel); multi.add(it.id); sel = it.id; } undoStack.pop(); draw(); renderProps(); return; }
+      if (!isSel(it.id)) multi.clear(); else if (sel && sel !== it.id) multi.add(sel);
+      sel = it.id;
       if (e.target.classList.contains("rot")) drag = { rot: it };
       else if (e.target.classList.contains("end1")) drag = { line: it, end: 1 };
       else if (e.target.classList.contains("end2")) drag = { line: it, end: 2 };
-      else drag = { move: it, dx: p.x - it.x, dy: p.y - it.y, dx2: it.x2 != null ? p.x - it.x2 : 0, dy2: it.y2 != null ? p.y - it.y2 : 0, moved: false };
+      else if (e.target.classList.contains("bendl")) drag = { bendLine: it };
+      else {
+        const group = multi.size ? st.items.filter(i => isSel(i.id)) : [it];
+        drag = { group: group.map(i => ({ i, x: i.x, y: i.y, x2: i.x2, y2: i.y2, cx: i.cx, cy: i.cy })), p0: p, moved: false };
+      }
       draw(); renderProps(); return;
     }
-    sel = null; drag = { pan: true, sx: e.clientX, sy: e.clientY, v0: { ...view } }; draw(); renderProps();
+    sel = null; multi.clear();
+    if (touchy(e) || tool !== "select") drag = { pan: true, sx: e.clientX, sy: e.clientY, v0: { ...view } };
+    else drag = { box: true, sx: e.clientX, sy: e.clientY, p0: p };
+    draw(); renderProps();
   });
   svg.addEventListener("pointermove", e => {
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId, e);
@@ -281,20 +352,38 @@
     if (!drag) return;
     if (drag.pinch && pointers.size === 2) { const k = drag.d0 / dist(); const c = drag.v0; view = { w: c.w * k, h: c.h * k, x: c.x + (c.w - c.w * k) / 2, y: c.y + (c.h - c.h * k) / 2 }; setView(); return; }
     if (drag.pan) { const r = svg.getBoundingClientRect(); view.x = drag.v0.x - (e.clientX - drag.sx) / r.width * view.w; view.y = drag.v0.y - (e.clientY - drag.sy) / r.height * view.h; setView(); return; }
+    if (drag.box) { const b = $("marquee"); b.hidden = false; Object.assign(b.style, { left: Math.min(e.clientX, drag.sx) + "px", top: Math.min(e.clientY, drag.sy) + "px", width: Math.abs(e.clientX - drag.sx) + "px", height: Math.abs(e.clientY - drag.sy) + "px" }); drag.p1 = p; return; }
+    if (drag.bend) { setBend(drag.bend[0], drag.bend[1], p); draw(); return; }
+    if (drag.bendLine) { const l = drag.bendLine; l.cx = 2 * p.x - (l.x + l.x2) / 2; l.cy = 2 * p.y - (l.y + l.y2) / 2; draw(); return; }
     if (drag.line) { if (drag.end === 1) { drag.line.x = p.x; drag.line.y = p.y; } else { drag.line.x2 = p.x; drag.line.y2 = p.y; } draw(); return; }
     if (drag.rot) { drag.rot.rot = Math.round(Math.atan2(p.y - drag.rot.y, p.x - drag.rot.x) * 180 / Math.PI / 5) * 5; draw(); return; }
-    if (drag.move) {
-      const it = drag.move; it.x = p.x - drag.dx; it.y = p.y - drag.dy; drag.moved = true;
-      if (it.x2 != null) { it.x2 = p.x - drag.dx2; it.y2 = p.y - drag.dy2; }
+    if (drag.group) {
+      const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y; if (Math.abs(dx) + Math.abs(dy) > 1) drag.moved = true;
+      drag.group.forEach(g => {
+        g.i.x = g.x + dx; g.i.y = g.y + dy;
+        if (g.x2 != null) { g.i.x2 = g.x2 + dx; g.i.y2 = g.y2 + dy; }
+        if (g.cx != null && LINES.includes(g.i.kind)) { g.i.cx = g.cx + dx; g.i.cy = g.cy + dy; }
+      });
       draw();
     }
   });
   const end = e => {
     pointers.delete(e.pointerId);
+    if (drag && drag.box) {
+      $("marquee").hidden = true;
+      if (drag.p1) {
+        const x1 = Math.min(drag.p0.x, drag.p1.x), x2 = Math.max(drag.p0.x, drag.p1.x), y1 = Math.min(drag.p0.y, drag.p1.y), y2 = Math.max(drag.p0.y, drag.p1.y), pad = S * scale() * .5;
+        const hit = (x, y) => x >= x1 - pad && x <= x2 + pad && y >= y1 - pad && y <= y2 + pad;
+        setupObj().items.forEach(i => { if (hit(i.x, i.y) || (i.x2 != null && (hit(i.x2, i.y2) || hit((i.x + i.x2) / 2, (i.y + i.y2) / 2)))) multi.add(i.id); });
+        sel = [...multi][0] || null; const n = multi.size; if (n === 1) multi.clear();
+        if (sel) toast(n + " selected · Ctrl+C copy · right-click for options");
+      }
+      drag = null; draw(); renderProps(); return;
+    }
     if (drag && !drag.pan && !drag.pinch) {
-      if (drag.move && drag.moved) delete drag.move.unplaced;
-      if (drag.move && !drag.moved) undoStack.pop();
-      if (drag.line && Math.hypot(drag.line.x2 - drag.line.x, drag.line.y2 - drag.line.y) < 10) { const st = setupObj(); st.items = st.items.filter(i => i !== drag.line); sel = null; }
+      if (drag.group && drag.moved) drag.group.forEach(g => delete g.i.unplaced);
+      if (drag.group && !drag.moved) undoStack.pop();
+      if (drag.line && drag.fresh && Math.hypot(drag.line.x2 - drag.line.x, drag.line.y2 - drag.line.y) < 10) { const st = setupObj(); st.items = st.items.filter(i => i !== drag.line); sel = null; }
       save(); renderProps(); draw();
     }
     drag = null;
@@ -302,19 +391,82 @@
   };
   svg.addEventListener("pointerup", end); svg.addEventListener("pointercancel", end);
   function dist() { const [a, b] = [...pointers.values()]; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1; }
+  const resize = (l, d) => l.forEach(i => i.size = Math.min(3, Math.max(.4, +((i.size || 1) + d).toFixed(2))));
   svg.addEventListener("wheel", e => {
-    e.preventDefault(); const p = pt(e), k = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+    e.preventDefault();
+    // Shift+wheel with something selected = resize it.
+    if (e.shiftKey && selItems().length) { resize(selItems(), e.deltaY > 0 ? -.1 : .1); save(); draw(); renderProps(); return; }
+    const p = pt(e), k = e.deltaY > 0 ? 1.12 : 1 / 1.12;
     view = { w: view.w * k, h: view.h * k, x: p.x - (p.x - view.x) * k, y: p.y - (p.y - view.y) * k }; setView();
   }, { passive: false });
+
+  // ---------- selection actions: copy / paste / duplicate / delete ----------
+  const selItems = () => { const st = setupObj(); return st ? st.items.filter(i => isSel(i.id)) : []; };
+  const shift = (n, dx, dy) => { n.x += dx; n.y += dy; if (n.x2 != null) { n.x2 += dx; n.y2 += dy; } if (n.cx != null && LINES.includes(n.kind)) { n.cx += dx; n.cy += dy; } return n; };
+  function copySel() { const l = selItems(); if (!l.length) { toast("Select something first (drag a box round it)"); return false; } clip = JSON.parse(JSON.stringify(l)); toast(l.length + " copied · go to the next setup and Ctrl+V"); return true; }
+  function paste(dx = 0, dy = 0) {
+    const st = setupObj(); if (!clip || !st) return toast("Nothing copied yet");
+    snapshot(); multi.clear();
+    clip.forEach(c => { const n = shift(Object.assign(JSON.parse(JSON.stringify(c)), { id: uid() }), dx, dy); st.items.push(n); multi.add(n.id); });
+    sel = [...multi][0]; if (multi.size === 1) multi.clear();
+    save(); draw(); renderProps(); toast(clip.length + " pasted into " + st.name); logAct("paste", clip.length + " items");
+  }
+  function copyToNextSetup() {
+    if (!copySel()) return;
+    if (cur.setup >= setups().length - 1) { const src = setupObj(), st = newSetup(setups().length + 1); if (src.plan) st.plan = src.plan; setups().push(st); }
+    cur.setup++; sel = null; multi.clear(); renderAll(); paste(); announce();
+  }
+  function removeSel() { if (!selItems().length) return; snapshot(); const st = setupObj(); st.items = st.items.filter(i => !isSel(i.id)); sel = null; multi.clear(); save(); draw(); renderProps(); }
+  function ctxMenu(e, it) {
+    closeMenus();
+    const m = document.createElement("div"); m.className = "menu"; m.style.left = e.clientX + "px"; m.style.top = e.clientY + "px";
+    const n = selItems().length, sized = it && ["char", "cam", "gear", "shape"].includes(it.kind);
+    m.innerHTML = it ? `<button data-a="dup">Duplicate</button><button data-a="copy">Copy${n > 1 ? " " + n + " items" : ""}</button><button data-a="next">Copy to next setup</button>${sized ? `<button data-a="big">Bigger ( ] )</button><button data-a="small">Smaller ( [ )</button>` : ""}${it.cx != null ? `<button data-a="straight">Straighten</button>` : ""}${it.kind === "cable" ? `<button data-a="flip">Flip corner</button>` : ""}<button data-a="front">Bring to front</button><button data-a="back">Send to back</button><button data-a="del" class="danger">Delete</button>`
+      : `<button data-a="paste">Paste here</button><button data-a="fit">Fit plan (F)</button><button data-a="keys">Shortcuts (?)</button>`;
+    const p = pt(e);
+    m.onclick = ev => {
+      const a = ev.target.dataset.a; if (!a) return; closeMenus(); const st = setupObj();
+      if (a === "dup") { if (copySel()) paste(S * scale() * .6, S * scale() * .6); }
+      if (a === "copy") copySel();
+      if (a === "next") copyToNextSetup();
+      if (a === "big" || a === "small") { snapshot(); resize(selItems(), a === "big" ? .2 : -.2); save(); draw(); renderProps(); }
+      if (a === "straight") { snapshot(); delete it.cx; delete it.cy; save(); draw(); }
+      if (a === "flip") { snapshot(); it.flip = !it.flip; save(); draw(); }
+      if (a === "front" || a === "back") { snapshot(); const l = selItems(); st.items = st.items.filter(i => !isSel(i.id)); st.items = a === "front" ? st.items.concat(l) : l.concat(st.items); save(); draw(); }
+      if (a === "del") removeSel();
+      if (a === "paste") { if (!clip) return toast("Nothing copied yet"); paste(p.x - clip[0].x, p.y - clip[0].y); }
+      if (a === "fit") fit();
+      if (a === "keys") openSettings();
+    };
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect(); if (r.bottom > innerHeight) m.style.top = (innerHeight - r.height - 8) + "px"; if (r.right > innerWidth) m.style.left = (innerWidth - r.width - 8) + "px";
+    setTimeout(() => document.addEventListener("pointerdown", closeOnOutside), 0);
+  }
+
+  // ---------- keyboard ----------
+  function saveNow() { saveDevice(); if (cur.scene && live()) Sync.pushScene(cur.scene, blocks[cur.scene]); flashSaved(); }
+  function flashSaved() { const t = $("savedTag"); t.hidden = false; t.textContent = "Saved " + new Date().toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }); }
   document.addEventListener("keydown", e => {
+    const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+    if (mod && k === "s") { e.preventDefault(); return saveNow(); }
     if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); return e.shiftKey ? undoRedo(redoStack, undoStack) : undoRedo(undoStack, redoStack); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); return undoRedo(redoStack, undoStack); }
-    if ((e.key === "Delete" || e.key === "Backspace") && sel) removeSel();
-    if (e.key === "Escape") { sel = null; closeLightbox(); draw(); renderProps(); }
-    if (e.key === "f" || e.key === "F") fit();
+    if (e.key === " ") { spaceDown = true; e.preventDefault(); return; }
+    if (mod && k === "z") { e.preventDefault(); return e.shiftKey ? undoRedo(redoStack, undoStack) : undoRedo(undoStack, redoStack); }
+    if (mod && k === "y") { e.preventDefault(); return undoRedo(redoStack, undoStack); }
+    if (mod && k === "c") { e.preventDefault(); return copySel(); }
+    if (mod && k === "v") { e.preventDefault(); return paste(); }
+    if (mod && k === "d") { e.preventDefault(); if (copySel()) paste(S * scale() * .6, S * scale() * .6); return; }
+    if (mod && k === "a") { e.preventDefault(); const st = setupObj(); if (!st) return; multi = new Set(st.items.map(i => i.id)); sel = [...multi][0] || null; draw(); renderProps(); return; }
+    if (mod) return;
+    if ((e.key === "Delete" || e.key === "Backspace") && selItems().length) removeSel();
+    if (e.key === "Escape") { sel = null; multi.clear(); closeLightbox(); closeMenus(); draw(); renderProps(); }
+    if (k === "f") fit();
+    if (e.key === "?") openSettings();
+    if (e.key === "[" || e.key === "]") { if (!selItems().length) return; snapshot(); resize(selItems(), e.key === "]" ? .1 : -.1); save(); draw(); renderProps(); }
+    const toolKeys = { v: "select", c: "char", a: "cam", l: "line180", g: "gear", p: "props", t: "track", e: "cable", s: "shape" };
+    if (toolKeys[k]) { const b = $("tools").querySelector(`[data-tool="${toolKeys[k]}"]`); if (b) b.click(); }
   });
-  function removeSel() { snapshot(); const st = setupObj(); st.items = st.items.filter(i => i.id !== sel); sel = null; save(); draw(); renderProps(); }
+  document.addEventListener("keyup", e => { if (e.key === " ") spaceDown = false; });
 
   // ---------- right panel: selected mark, or the setup's shot list ----------
   const SHOTS = ["ECU", "CU", "MCU", "MS", "MLS", "LS", "WS", "EWS", "OTS", "2S", "3S", "Insert", "POV", "High angle", "Low angle", "Top down"];
@@ -324,13 +476,13 @@
     return `<div class="shotlist"><div class="cap">Shot list · ${esc(st.name)}</div>${sl.note ? `<p class="hint">${esc(sl.note)}</p>` : ""}${one(sl.A, "A")}${one(sl.B, "B")}${(st.extra || []).map(x => one(x.A, "A") + one(x.B, "B")).join("")}</div>`;
   }
   function renderProps() {
-    const st = setupObj(), it = st && st.items.find(i => i.id === sel), box = $("props");
+    const st = setupObj(), box = $("props"), it = st && !multi.size && st.items.find(i => i.id === sel);
     $("right").classList.toggle("open", !!it);
     if (!it) {
       $("propHead").textContent = st ? st.name : "Nothing selected";
       const unplaced = st ? st.items.filter(i => i.unplaced).length : 0;
       box.innerHTML = (st ? shotListHtml(st) : "") + (unplaced ? `<p class="note-y">${unplaced} camera${unplaced > 1 ? "s" : ""} from the shot list ${unplaced > 1 ? "are" : "is"} waiting at the bottom of the plan (yellow ring): drag ${unplaced > 1 ? "them" : "it"} into place.</p>` : "") +
-        `<p class="hint">Pick a tool on the plan and tap to place. Tap the same character or camera again for the next position (A1 → A2). Drag to move, drag the white dot to turn. Pinch or scroll to zoom. Ctrl+Z undoes.</p>`;
+        `<p class="hint">Pick a tool on the plan and tap to place. Tap the same character or camera again for the next position (A1 → A2). Drag to move, drag the white dot to turn. Drag a box to select many; right-click for options. Pinch or scroll to zoom. Press ? for all shortcuts.</p>`;
       return;
     }
     const f = (lab, html) => `<div class="f"><label>${lab}</label>${html}</div>`;
@@ -338,23 +490,85 @@
     let h = "";
     if (it.kind === "cam") {
       $("propHead").textContent = it.ref + " cam · " + it.label;
-      h += f("Lens", inp("lens", it.lens, "35mm", "lensList")) + f("Shot size", inp("shot", it.shot, "MCU", "shotList")) + f("Rig / movement", inp("move", it.move, "Sticks, slider, track, gimbal...", "rigList")) + f("Height", inp("height", it.height, "1.4 m")) + f("Notes", `<textarea data-k="note">${esc(it.note || "")}</textarea>`);
+      h += f("Lens", inp("lens", it.lens, "35mm", "lensList")) + f("Shot size", inp("shot", it.shot, "MCU", "shotList")) + f("Rig / movement", inp("move", it.move, "Sticks, slider, track, gimbal...", "rigList")) + f("Height", inp("height", it.height, "1.4 m")) + f("Size", `<input type="range" min=".4" max="3" step=".1" data-k="size" value="${it.size || 1}">`) + f("Notes", `<textarea data-k="note">${esc(it.note || "")}</textarea>`);
     } else if (it.kind === "char") {
       $("propHead").textContent = it.ref + " · position " + it.n;
-      h += f("Action at this mark", `<textarea data-k="note" placeholder="What happens here">${esc(it.note || "")}</textarea>`);
+      h += f("Action at this mark", `<textarea data-k="note" placeholder="What happens here">${esc(it.note || "")}</textarea>`) + f("Size", `<input type="range" min=".4" max="3" step=".1" data-k="size" value="${it.size || 1}">`);
     } else if (it.kind === "gear") {
       $("propHead").textContent = Assets.GEAR[it.ref]?.name || "Gear";
       h += f("Label / notes", inp("note", it.note, "e.g. 2K through window")) + f("Size", `<input type="range" min=".5" max="3" step=".1" data-k="size" value="${it.size || 1}">`);
-    } else { $("propHead").textContent = "180 line"; h += `<p class="hint">Drag the white ends to adjust.</p>`; }
-    if (it.kind !== "line180") h += f("Turn", `<div class="row"><button class="btn small" data-turn="-15">⟲ 15°</button><button class="btn small" data-turn="15">⟳ 15°</button><button class="btn small" data-turn="180">180°</button></div>`);
+    } else if (it.kind === "shape") {
+      $("propHead").textContent = "Shape";
+      h += f("Label", inp("note", it.note, "e.g. Bench, Water tank")) + f("Colour", `<input type="color" data-k="colour" value="${it.colour || "#ECEEF3"}">`) + f("Size", `<input type="range" min=".3" max="6" step=".1" data-k="size" value="${it.size || 1}">`);
+    } else {
+      $("propHead").textContent = { line180: "180 line", track: "Track", cable: "Extension cable" }[it.kind];
+      h += `<p class="hint">${it.kind === "cable" ? "Drag the white ends. Right-click: flip the corner." : "Drag the white ends. Drag the diamond to curve it. Right-click: straighten."}</p>` + (it.kind !== "line180" ? f("Label / notes", inp("note", it.note, it.kind === "track" ? "e.g. 6 m track" : "e.g. 25 m to genny")) : "");
+    }
+    if (!LINES.includes(it.kind)) h += f("Turn", `<div class="row"><button class="btn small" data-turn="-15">⟲ 15°</button><button class="btn small" data-turn="15">⟳ 15°</button><button class="btn small" data-turn="180">180°</button></div>`);
     h += `<div class="row"><button class="btn red" id="delMark">Delete</button><button class="btn" id="doneMark">Done</button></div>`;
     h += `<datalist id="lensList">${["16-35mm", "24-70mm", "70-200mm", "24mm", "35mm", "50mm", "85mm"].map(o => `<option value="${o}">`).join("")}</datalist><datalist id="shotList">${SHOTS.map(o => `<option value="${o}">`).join("")}</datalist><datalist id="rigList">${["Sticks", "Slider", "Track", "Dolly track", "Gimbal", "Handheld", "Lowball", "Combo"].map(o => `<option value="${o}">`).join("")}</datalist>`;
     box.innerHTML = h;
     box.querySelectorAll("[data-k]").forEach(el => el.oninput = () => { it[el.dataset.k] = el.type === "range" ? +el.value : el.value; save(); draw(); });
+    if (it.kind === "gear" && Assets.GEAR[it.ref]) $("propHead").textContent = Assets.GEAR[it.ref].name;
     box.querySelectorAll("[data-turn]").forEach(el => el.onclick = () => { snapshot(); it.rot = ((it.rot || 0) + +el.dataset.turn) % 360; save(); draw(); });
     $("delMark").onclick = removeSel;
     $("doneMark").onclick = () => { sel = null; draw(); renderProps(); };
   }
+
+  // ---------- add a character (name, 1-2 letters, colour) ----------
+  const PALETTE = ["#5FC9F3", "#FFC857", "#7FE3A0", "#FF8FA3", "#C3A6FF", "#FFB070", "#8FD3FF", "#F5F5F5", "#E5484D", "#3DD6C6", "#B5E853", "#D98CFF"];
+  function addCharacter() {
+    if (!prod) return toast("Import a script first");
+    const sc = sceneObj();
+    const box = document.createElement("div"); box.className = "modal";
+    const used = new Set(prod.characters.map(c => c.colour));
+    const col0 = PALETTE.find(c => !used.has(c)) || PALETTE[0];
+    box.innerHTML = `<form class="card wide"><h2>Add a character${sc ? " to Sc " + esc(sc.number) : ""}</h2>
+      <label>Name<input name="n" list="castList" placeholder="e.g. Zola" required></label>
+      <datalist id="castList">${prod.characters.map(c => `<option value="${esc(c.name)}">`).join("")}</datalist>
+      <label>Letters on the circle <small>(1 or 2, e.g. ZO and ZA when two names start with Z)</small><input name="l" maxlength="2" autocapitalize="characters"></label>
+      <label>Colour<div class="row" id="cols">${PALETTE.map(c => `<button type="button" class="dot" data-c="${c}" style="background:${c};width:26px;height:26px;${c === col0 ? "outline:2px solid #fff" : ""}"></button>`).join("")}<input type="color" name="c" value="${col0}" style="width:40px;height:28px;padding:0;border:0;background:none"></div></label>
+      <p class="err" hidden></p>
+      <div class="row"><button class="btn red big">Add</button><button type="button" class="btn" data-a="x">Cancel</button></div></form>`;
+    const f = box.querySelector("form"), err = box.querySelector(".err");
+    const suggest = () => { const n = f.n.value.trim().toUpperCase(); if (!n || f.l.dataset.touched) return; const one = n[0], clash = prod.characters.some(c => c.name.toUpperCase() !== n && c.letter === one); f.l.value = clash ? n.slice(0, 2) : one; const ex = prod.characters.find(c => c.name.toUpperCase() === n); if (ex) { f.l.value = ex.letter; f.c.value = ex.colour; } };
+    f.n.oninput = suggest; f.l.oninput = () => f.l.dataset.touched = 1;
+    box.querySelector("#cols").onclick = e => { const c = e.target.dataset.c; if (!c) return; f.c.value = c; box.querySelectorAll("#cols .dot").forEach(d => d.style.outline = d.dataset.c === c ? "2px solid #fff" : ""); };
+    box.querySelector('[data-a="x"]').onclick = () => box.remove();
+    f.onsubmit = e => {
+      e.preventDefault();
+      const name = f.n.value.trim(), letter = f.l.value.trim().toUpperCase().slice(0, 2) || name[0].toUpperCase(), colour = f.c.value;
+      const ex = prod.characters.find(c => c.name.toUpperCase() === name.toUpperCase());
+      const clash = prod.characters.find(c => c !== ex && c.letter === letter);
+      if (clash) { err.textContent = `${clash.name} already uses ${letter}. Try two letters (e.g. ${name.slice(0, 2).toUpperCase()}).`; err.hidden = false; return; }
+      let ch = ex;
+      if (ex) { ex.letter = letter; ex.colour = colour; } else { ch = { name: name.toUpperCase(), letter, colour }; prod.characters.push(ch); }
+      if (sc && !sc.characters.includes(ch.name)) sc.characters.push(ch.name);
+      if (live()) Sync.pushProduction(prod);
+      saveDevice(); box.remove(); pickVal = ch.name; tool = "char"; renderPick(); draw(); toast(ch.name + " added · tap the plan to place " + letter + "1"); logAct("character", ch.name);
+    };
+    document.body.appendChild(box); setTimeout(() => f.n.focus(), 50);
+  }
+
+  // ---------- settings + shortcuts ----------
+  const KEYS = [["Left click", "Select / drag. Drag on empty plan = box select"], ["Right click", "Options: duplicate, copy, copy to next setup, size, delete"], ["Middle drag / Space+drag", "Move the whole plan"], ["Wheel", "Zoom"], ["Shift+wheel, [ and ]", "Smaller / bigger (selected)"], ["Shift+click", "Add to selection"], ["Ctrl+A", "Select all in this setup"], ["Ctrl+C / Ctrl+V", "Copy / paste (paste into another setup)"], ["Ctrl+D", "Duplicate"], ["Delete", "Delete selected"], ["Ctrl+Z / Ctrl+Y", "Undo / redo"], ["Ctrl+S", "Save now (it also saves by itself)"], ["F", "Fit plan"], ["V C A L G P T E S", "Select, Character, Camera, 180 line, Gear, Props, Track, Cable, Shape"], ["Esc", "Clear selection"], ["?", "This panel"]];
+  function openSettings() {
+    closeMenus();
+    const dev = new URLSearchParams(location.search).has("dev");
+    const box = document.createElement("div"); box.className = "modal";
+    box.innerHTML = `<div class="card wide"><h2>Settings</h2>
+      <div class="setrow">Character + camera size<input type="range" min=".5" max="2" step=".05" data-s="mark" value="${SET.mark}"></div>
+      <div class="setrow">Move dots<input type="range" min=".4" max="2" step=".05" data-s="dot" value="${SET.dot}"></div>
+      <div class="setrow">Cable darkness<input type="range" min=".15" max="1" step=".05" data-s="cable" value="${SET.cable}"></div>
+      <p class="hint">Sizes here are for your screen. To size one mark for everyone, select it and use [ ] or the Size slider.</p>
+      <h3>Shortcuts</h3><div class="keys">${KEYS.map(([k, d]) => `<kbd>${k}</kbd><span>${d}</span>`).join("")}</div>
+      ${dev ? `<h3>Developer</h3><button class="btn" data-a="log">Activity log</button>` : ""}
+      <div class="row"><button class="btn red" data-a="x">Close</button></div></div>`;
+    box.querySelectorAll("[data-s]").forEach(r => r.oninput = () => { SET[r.dataset.s] = +r.value; saveSet(); draw(); });
+    box.onclick = e => { const a = e.target.dataset.a; if (a === "x" || e.target === box) box.remove(); if (a === "log") { box.remove(); Sync.showLog && Sync.showLog(); } };
+    document.body.appendChild(box);
+  }
+  $("btnSettings").onclick = openSettings;
 
   // ---------- storyboard ----------
   function renderFrames() {

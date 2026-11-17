@@ -12,4 +12,7 @@ Block scenes on floor plans with your crew. A free web app: open the link, Add t
 
 Your scripts, plans and frames stay on your device (or in your own crew database). Nothing private is stored in this repository.
 
-Version 1.0.0 · Developed by Matthew Prins · Born 16 November 2026
+Version 1.2.0 · Developed by Matthew Prins · Born 16 November 2026
+
+## 1.2.0 (17 Nov 2026)
+Floor plan per setup · tracks you can select, move and curve · bend character and camera moves · add characters (name, 1-2 letters, colour) · Props tab (bonfire, ihadi) · generator · right-angle extension cables · labelled shapes · box select, copy/paste into the next setup · right-click menu, middle-drag pan · resize marks · Ctrl+S + autosave · settings and shortcuts (?) · crew chat · names on hover.

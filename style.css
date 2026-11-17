@@ -145,3 +145,20 @@ textarea{min-height:76px;resize:vertical}
   .frame{flex-basis:150px}
   .toast{bottom:150px}
 }
+/* v1.2.0 */
+.av{position:relative;cursor:default}
+.av:hover::after{content:attr(data-name);position:absolute;top:36px;right:0;white-space:nowrap;background:var(--panel2);color:var(--text);border:1px solid var(--line2);border-radius:7px;padding:4px 8px;font-size:12px;font-weight:500;z-index:50;box-shadow:var(--shadow)}
+.dot.add{background:var(--line2);color:var(--text)}
+#btnChat{position:relative;font-size:19px}#chatDot{position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:var(--red)}
+#btnSettings{font-size:20px}
+.saved{font-size:11px;color:#7FE3A0}
+.chat{position:fixed;right:14px;bottom:14px;width:320px;max-width:calc(100vw - 32px);height:420px;max-height:70vh;z-index:45;background:var(--panel);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.chat .ch{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+.chat .msgs{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.chat .msgs .m b{font-size:12px}.chat .msgs .m small{color:var(--muted);margin-left:6px;font-size:10px}
+.chat form{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}.chat input{flex:1}
+.marquee{position:fixed;z-index:30;border:1px dashed #fff;background:rgba(255,255,255,.08);pointer-events:none}
+.modal .card.wide{max-width:520px;text-align:left}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}.keys kbd{background:var(--panel2);border:1px solid var(--line2);border-radius:5px;padding:1px 6px;font-family:inherit;font-size:12px;white-space:nowrap}
+.setrow{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:13px}.setrow input[type=range]{flex:1}
+.devlog{max-height:50vh;overflow:auto;font-size:12px}.devlog table{width:100%;border-collapse:collapse}.devlog td,.devlog th{border-bottom:1px solid var(--line);padding:4px;text-align:left;vertical-align:top}
