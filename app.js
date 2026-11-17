@@ -615,11 +615,11 @@
       <div class="setrow">Cable darkness<input type="range" min=".15" max="1" step=".05" data-s="cable" value="${SET.cable}"></div>
       <p class="hint">Sizes here are for your screen. To size one mark for everyone, select it and use [ ] or the Size slider.</p>
       <h3>Shortcuts</h3><div class="keys">${KEYS.map(([k, d]) => `<kbd>${k}</kbd><span>${d}</span>`).join("")}</div>
-      <div class="row"><button class="btn" data-a="fb">Send feedback</button><a class="btn" href="terms.html" target="_blank">Terms and privacy</a></div><p class="hint">© 2026 Matthew Prins / Watermelon Media 01. Planning aid only, provided as is. By using the app you accept the Terms.</p>
+      <div class="row"><button class="btn" data-a="fb">Send feedback</button><a class="btn" href="terms.html" target="_blank">Terms and privacy</a></div><p class="hint">© 2026 Matthew Prins. Planning aid only, provided as is. By using the app you accept the Terms. <button class="link" data-a="donate" style="font-size:inherit">&#9825; Support the app</button></p>
       ${dev ? `<h3>Developer</h3><button class="btn" data-a="log">Activity log + feedback (Firebase)</button>` : ""}
       <div class="row"><button class="btn red" data-a="x">Close</button></div></div>`;
     box.querySelectorAll("[data-s]").forEach(r => r.oninput = () => { SET[r.dataset.s] = +r.value; saveSet(); draw(); });
-    box.onclick = e => { const a = e.target.dataset.a; if (a === "x" || e.target === box) box.remove(); if (a === "log") { box.remove(); Sync.showLog && Sync.showLog(); } if (a === "fb") { box.remove(); Sync.feedback ? Sync.feedback() : toast("Join your crew first"); } };
+    box.onclick = e => { const a = e.target.dataset.a; if (a === "x" || e.target === box) box.remove(); if (a === "log") { box.remove(); Sync.showLog && Sync.showLog(); } if (a === "donate") { box.remove(); Sync.donate && Sync.donate(); } if (a === "fb") { box.remove(); Sync.feedback ? Sync.feedback() : toast("Join your crew first"); } };
     document.body.appendChild(box);
   }
   $("btnSettings").onclick = openSettings;

@@ -241,6 +241,22 @@ window.Sync = (() => {
     document.body.appendChild(box); setTimeout(() => f.m.focus(), 50);
   }
 
+
+  // ---------- donate (details live in the private crew database, never in the public code) ----------
+  async function donate() {
+    if (!live) return toast("Join your crew first");
+    let d = null; try { const x = await P().collection("info").doc("donate").get(); if (x.exists) d = x.data(); } catch (e) {}
+    if (!d) return toast("Donation details are not available right now");
+    const row = (k, v) => `<div class="setrow"><span style="min-width:110px;color:var(--muted)">${k}</span><b>${esc(v)}</b></div>`;
+    const box = el(`<div class="modal"><div class="card wide"><h2>&#9825; Support Scene Blocker</h2>
+      <p class="hint">Scene Blocker is free. If it helps your production, a small donation keeps it going. Thank you!</p>
+      ${row("Account name", d.name)}${row("Bank", d.bank)}${row("Account number", d.account)}${d.branch ? row("Branch code", d.branch) : ""}${row("Reference", d.ref || "Scene Blocker")}
+      <div class="row"><button class="btn red" data-a="copy">Copy account number</button><button class="btn" data-a="x">Close</button></div>
+      <p class="hint">Donations are voluntary and buy no extra features. See Terms.</p></div></div>`);
+    box.onclick = async e => { const a = e.target.dataset.a; if (a === "copy") { try { await navigator.clipboard.writeText(d.account); toast("Account number copied"); } catch (er) {} return; } if (a === "x" || e.target === box) box.remove(); };
+    document.body.appendChild(box);
+  }
+
   window.addEventListener("load", () => setTimeout(start, 100));
-  return { get me() { return me; }, get live() { return live; }, get code() { return code; }, log, showLog, feedback, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
+  return { get me() { return me; }, get live() { return live; }, get code() { return code; }, log, showLog, feedback, donate, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
 })();
