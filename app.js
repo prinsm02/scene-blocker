@@ -765,6 +765,17 @@
     const appWin = matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: minimal-ui)").matches || (window.menubar && !window.menubar.visible && !window.toolbar.visible);
     if (appWin && !sessionStorage.getItem("sb-sized") && outerWidth < screen.availWidth - 40) { moveTo(screen.availLeft || 0, screen.availTop || 0); resizeTo(screen.availWidth, screen.availHeight); sessionStorage.setItem("sb-sized", "1"); }
   } catch (e) {}
+  // Auto-update: if the site has a newer version than this window, reload once (after saving).
+  async function checkVersion() {
+    try {
+      const h = await (await fetch("index.html?ts=" + Date.now(), { cache: "no-store" })).text();
+      const v = (h.match(/id="ver">([^<]+)/) || [])[1], mine = (document.getElementById("ver") || {}).textContent || window.SB_VER;
+      if (v && mine && v !== mine && sessionStorage.getItem("sb-upd") !== v && !drag) { sessionStorage.setItem("sb-upd", v); saveDevice(); toast("Updating to " + v + "..."); setTimeout(() => location.reload(), 1200); }
+    } catch (e) {}
+  }
+  window.SB_VER = (document.getElementById("ver") || {}).textContent;
+  setTimeout(checkVersion, 8000); setInterval(checkVersion, 10 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkVersion(); });
   // ---------- start ----------
   const SPLASH_MS = new URLSearchParams(location.search).has("nosplash") ? 0 : 3500;
   setTimeout(() => { const s = $("splash"); if (!s) return; s.classList.add("out"); setTimeout(() => { s.remove(); fit(); }, 500); }, SPLASH_MS);
