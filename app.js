@@ -754,6 +754,11 @@
     load(p, b) { prod = p; blocks = b || {}; cur.scene = prod.scenes[0]?.number; cur.setup = 0; saveDevice(); renderAll(); setTimeout(fit, 50); },
   };
 
+  // App window (Desktop icon / installed app): open filling the screen once per launch; you can still resize after.
+  try {
+    const appWin = matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: minimal-ui)").matches || (window.menubar && !window.menubar.visible && !window.toolbar.visible);
+    if (appWin && !sessionStorage.getItem("sb-sized") && outerWidth < screen.availWidth - 40) { moveTo(screen.availLeft || 0, screen.availTop || 0); resizeTo(screen.availWidth, screen.availHeight); sessionStorage.setItem("sb-sized", "1"); }
+  } catch (e) {}
   // ---------- start ----------
   const SPLASH_MS = new URLSearchParams(location.search).has("nosplash") ? 0 : 3500;
   setTimeout(() => { const s = $("splash"); if (!s) return; s.classList.add("out"); setTimeout(() => { s.remove(); fit(); }, 500); }, SPLASH_MS);
