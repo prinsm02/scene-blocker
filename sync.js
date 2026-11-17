@@ -245,7 +245,7 @@ window.Sync = (() => {
   // ---------- donate (details live in the private crew database, never in the public code) ----------
   async function donate() {
     if (!live) return toast("Join your crew first");
-    let d = null; try { const x = await P().collection("info").doc("donate").get(); if (x.exists) d = x.data(); } catch (e) {}
+    let d = null; try { const x = await P().collection("info").doc("bank").get(); if (x.exists) d = x.data(); } catch (e) {}
     if (!d) return toast("Donation details are not available right now");
     const row = (k, v) => `<div class="setrow"><span style="min-width:110px;color:var(--muted)">${k}</span><b>${esc(v)}</b></div>`;
     const box = el(`<div class="modal"><div class="card wide"><h2>&#9825; Support Scene Blocker</h2>
