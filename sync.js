@@ -178,8 +178,10 @@ window.Sync = (() => {
   function startChat() {
     const btn = document.getElementById("btnChat"), panel = document.getElementById("chat"); if (!btn) return;
     btn.hidden = false;
-    btn.onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) { markSeen(); document.getElementById("chatIn").focus(); } };
-    document.getElementById("chatClose").onclick = () => panel.hidden = true;
+    const show = on => { panel.hidden = !on; panel.style.display = on ? "flex" : "none"; if (on) { markSeen(); document.getElementById("chatIn").focus(); } };
+    btn.onclick = () => show(panel.style.display === "none" || panel.hidden);
+    document.getElementById("chatClose").addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); show(false); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") show(false); });
     document.getElementById("chatForm").onsubmit = e => {
       e.preventDefault(); const i = document.getElementById("chatIn"), txt = i.value.trim(); if (!txt) return;
       i.value = ""; P().collection("chat").add({ name: me.name, colour: me.colour, text: txt.slice(0, 1000), t: Date.now(), scene: App.cur.scene || null }).catch(() => toast("Message not sent"));
@@ -190,7 +192,7 @@ window.Sync = (() => {
       const box = document.getElementById("msgs");
       box.innerHTML = chatMsgs.map(m => `<div class="m"><b style="color:${esc(m.colour)}">${esc(m.name)}</b><small>${new Date(m.t).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}${m.scene ? " · Sc " + esc(m.scene) : ""}</small><div>${esc(m.text)}</div></div>`).join("") || `<p class="hint">No messages yet. Say hi to the crew.</p>`;
       box.scrollTop = box.scrollHeight;
-      if (!panel.hidden) markSeen(); else document.getElementById("chatDot").hidden = !chatMsgs.some(m => m.t > chatSeen && m.name !== me.name);
+      if (panel.style.display === "flex") markSeen(); else document.getElementById("chatDot").hidden = !chatMsgs.some(m => m.t > chatSeen && m.name !== me.name);
     }));
   }
   function markSeen() { chatSeen = Date.now(); localStorage.setItem("sb-chat-seen", chatSeen); document.getElementById("chatDot").hidden = true; }

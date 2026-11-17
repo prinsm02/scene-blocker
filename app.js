@@ -15,7 +15,7 @@
   let drag = null, pending = null, multi = new Set(), clip = null, spaceDown = false;
   const undoStack = [], redoStack = [];
   // Per-device display settings (sizes of marks, move dots, cable look).
-  const SET = Object.assign({ mark: 1, dot: 1, cable: .55 }, (() => { try { return JSON.parse(localStorage.getItem("sb-settings") || "{}"); } catch (e) { return {}; } })());
+  const SET = Object.assign({ mark: 1, dot: 1, cable: .55, trail: 1 }, (() => { try { return JSON.parse(localStorage.getItem("sb-settings") || "{}"); } catch (e) { return {}; } })());
   const saveSet = () => { try { localStorage.setItem("sb-settings", JSON.stringify(SET)); } catch (e) {} };
   const isSel = id => sel === id || multi.has(id);
   const LINES = ["line180", "track", "cable"];
@@ -206,7 +206,7 @@
     if (tool === "shape") [["rect", "Box"], ["circle", "Circle"], ["label", "Text label"]].forEach(([v, n]) => opts.push({ v, html: Assets.shapeIcon(v) + n }));
     if (!pickVal && opts.length) pickVal = opts[0].v;
     opts.forEach(o => { const b = document.createElement("button"); b.innerHTML = o.html; if (o.v === pickVal) b.className = "on"; b.onclick = () => { if (o.v === "__add") return addCharacter(); pickVal = o.v; renderPick(); }; box.appendChild(b); });
-    const hint = { char: "Tap the plan to place their next position. A1 → A2 joins with a dotted line; select a mark and drag the small diamond to bend the move.", cam: "Tap the plan to place the camera. Tap again for its move (A1 → A2). Drag the diamond to bend it.", gear: "Tap the plan to place it.", props: "Tap the plan to place it.", line180: "Drag across the plan to draw the 180 line.", track: "Drag to lay track. Select it: drag the ends, drag the middle diamond to curve it, drag the rails to move it.", cable: "Drag from the power to the light. The cable runs at right angles.", shape: "Tap the plan to place a shape, then type its label on the right.", draw: "Draw on the plan to point something out. It glows in your colour with your name. Select it and press Delete to remove." }[tool];
+    const hint = { char: "Tap the plan to place their next position. A1 → A2 joins with a dotted line; select a mark: drag a diamond to add a bend point (as many as you like), drag the round points to shape it, right-click a point to remove it.", cam: "Tap the plan to place the camera. Tap again for its move (A1 → A2). Drag the diamond to bend it.", gear: "Tap the plan to place it.", props: "Tap the plan to place it.", line180: "Drag across the plan to draw the 180 line.", track: "Drag to lay track. Select it: drag the ends, drag the middle diamond to curve it, drag the rails to move it.", cable: "Drag from the power to the light. The cable runs at right angles.", shape: "Tap the plan to place a shape, then type its label on the right.", draw: "Draw on the plan to point something out. It glows in your colour with your name. Select it and press Delete to remove." }[tool];
     if (hint) box.insertAdjacentHTML("beforeend", `<span class="hint">${hint}</span>`);
   }
 
@@ -226,6 +226,19 @@
   // Curve helpers: control point (cx, cy) on the later mark / line; handle sits on the curve midpoint.
   const bendCtl = (a, b) => b.cx != null ? { x: (a.x + 2 * b.cx + b.x) / 4, y: (a.y + 2 * b.cy + b.y) / 4 } : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   const bendPath = (a, b) => b.cx != null ? `M${a.x} ${a.y} Q${b.cx} ${b.cy} ${b.x} ${b.y}` : `M${a.x} ${a.y} L${b.x} ${b.y}`;
+  const segPts = (a, b) => [[a.x, a.y], ...(b.via || []), [b.x, b.y]];
+  function smooth(P) {
+    if (P.length === 2) return `M${P[0][0]} ${P[0][1]} L${P[1][0]} ${P[1][1]}`;
+    let d = `M${P[0][0]} ${P[0][1]}`;
+    for (let i = 0; i < P.length - 1; i++) {
+      const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
+      d += ` C${p1[0] + (p2[0] - p0[0]) / 6} ${p1[1] + (p2[1] - p0[1]) / 6} ${p2[0] - (p3[0] - p1[0]) / 6} ${p2[1] - (p3[1] - p1[1]) / 6} ${p2[0]} ${p2[1]}`;
+    }
+    return d;
+  }
+  const movePath = (a, b) => b.via && b.via.length ? smooth(segPts(a, b)) : bendPath(a, b);
+  // Old single bend (cx, cy) becomes one bend point the first time it is edited.
+  const toVia = (a, b) => { if (!b.via) b.via = []; if (b.cx != null) { const c = bendCtl(a, b); b.via.push([c.x, c.y]); delete b.cx; delete b.cy; } };
   const setBend = (a, b, p) => { b.cx = 2 * p.x - (a.x + b.x) / 2; b.cy = 2 * p.y - (a.y + b.y) / 2; };
   function lineSvg(l, s) {
     const on = isSel(l.id), A = { x: l.x, y: l.y }, B = { x: l.x2, y: l.y2, cx: l.cx, cy: l.cy };
@@ -257,9 +270,17 @@
       // Move lines: straight, or bent through the control point stored on the later mark (cx, cy).
       const ds = s * SET.dot;
       for (let k = 1; k < g.length; k++) {
-        const a = g[k - 1], b = g[k], d = bendPath(a, b);
-        out += `<path d="${d}" fill="none" stroke="#14161B" stroke-opacity=".55" stroke-width="${ds * .18}" stroke-linecap="round" stroke-dasharray="${ds * .02} ${ds * .2}"/><path d="${d}" fill="none" stroke="${col}" stroke-width="${ds * .11}" stroke-dasharray="${ds * .02} ${ds * .2}" stroke-linecap="round"/>`;
-        if (sel === b.id) { const c = bendCtl(a, b); out += `<rect class="bend" data-id="${b.id}" x="${c.x - s * .16}" y="${c.y - s * .16}" width="${s * .32}" height="${s * .32}" fill="#fff" stroke="${col}" stroke-width="${s * .05}" transform="rotate(45 ${c.x} ${c.y})"/>`; }
+        const a = g[k - 1], b = g[k], d = movePath(a, b), op = SET.trail * (b.fade == null ? 1 : b.fade);
+        out += `<path d="${d}" fill="none" stroke="#14161B" stroke-opacity="${.55 * op}" stroke-width="${ds * .18}" stroke-linecap="round" stroke-dasharray="${ds * .02} ${ds * .2}"/><path d="${d}" fill="none" stroke="${col}" stroke-opacity="${op}" stroke-width="${ds * .11}" stroke-dasharray="${ds * .02} ${ds * .2}" stroke-linecap="round"/>`;
+        if (sel === b.id || sel === a.id) {
+          // Round handles = bend points (drag; right-click removes). Diamonds between = add a new bend point.
+          if (b.cx != null && !b.via) { const c = bendCtl(a, b); out += `<circle class="via" data-id="${b.id}" data-k="old" cx="${c.x}" cy="${c.y}" r="${s * .15}" fill="#fff" stroke="${col}" stroke-width="${s * .05}"/>`; }
+          else {
+            const P = segPts(a, b);
+            for (let j = 0; j < P.length - 1; j++) { const mx = (P[j][0] + P[j + 1][0]) / 2, my = (P[j][1] + P[j + 1][1]) / 2; out += `<rect class="bend" data-id="${b.id}" data-k="${j}" x="${mx - s * .12}" y="${my - s * .12}" width="${s * .24}" height="${s * .24}" fill="#fff" fill-opacity=".8" stroke="${col}" stroke-width="${s * .04}" transform="rotate(45 ${mx} ${my})"/>`; }
+            (b.via || []).forEach((v, j) => out += `<circle class="via" data-id="${b.id}" data-k="${j}" cx="${v[0]}" cy="${v[1]}" r="${s * .15}" fill="#fff" stroke="${col}" stroke-width="${s * .05}"/>`);
+          }
+        }
       }
     });
     st.items.filter(i => LINES.includes(i.kind)).forEach(l => out += lineSvg(l, s));
@@ -303,6 +324,18 @@
     if (pointers.size === 2) { drag = { pinch: true, d0: dist(), v0: { ...view } }; return; }
     const p = pt(e), st = setupObj(), m = e.target.closest(".mark");
     if (e.button === 1 || spaceDown) { e.preventDefault(); drag = { pan: true, sx: e.clientX, sy: e.clientY, v0: { ...view } }; return; }
+    if (e.target.classList.contains("via") || e.target.classList.contains("bend")) {
+      const b = st.items.find(i => i.id === e.target.dataset.id), a = st.items.filter(i => i.kind === b.kind && i.ref === b.ref && i.n < b.n).sort((x, y) => y.n - x.n)[0];
+      if (!a) return;
+      snapshot(); toVia(a, b);
+      if (e.target.classList.contains("via")) {
+        const k = e.target.dataset.k === "old" ? b.via.length - 1 : +e.target.dataset.k;
+        if (e.button === 2 || e.altKey) { b.via.splice(k, 1); if (!b.via.length) delete b.via; save(); draw(); return; }
+        drag = { via: b, k }; return;
+      }
+      if (e.button === 2) { undoStack.pop(); return; }
+      const k = +e.target.dataset.k; b.via.splice(k, 0, [p.x, p.y]); drag = { via: b, k }; draw(); return;
+    }
     if (e.button === 2) {
       if (m) { const id = m.dataset.id; if (!isSel(id)) { sel = id; multi.clear(); } draw(); renderProps(); }
       return ctxMenu(e, m ? st.items.find(i => i.id === m.dataset.id) : null);
@@ -345,7 +378,7 @@
       else if (e.target.classList.contains("bendl")) drag = { bendLine: it };
       else {
         const group = multi.size ? st.items.filter(i => isSel(i.id)) : [it];
-        drag = { group: group.map(i => ({ i, x: i.x, y: i.y, x2: i.x2, y2: i.y2, cx: i.cx, cy: i.cy })), p0: p, moved: false };
+        drag = { group: group.map(i => ({ i, x: i.x, y: i.y, x2: i.x2, y2: i.y2, cx: i.cx, cy: i.cy, via0: i.via ? i.via.map(v => [...v]) : null })), p0: p, moved: false };
       }
       draw(); renderProps(); return;
     }
@@ -363,6 +396,7 @@
     if (drag.pan) { const r = svg.getBoundingClientRect(); view.x = drag.v0.x - (e.clientX - drag.sx) / r.width * view.w; view.y = drag.v0.y - (e.clientY - drag.sy) / r.height * view.h; setView(); return; }
     if (drag.box) { const b = $("marquee"); b.hidden = false; Object.assign(b.style, { left: Math.min(e.clientX, drag.sx) + "px", top: Math.min(e.clientY, drag.sy) + "px", width: Math.abs(e.clientX - drag.sx) + "px", height: Math.abs(e.clientY - drag.sy) + "px" }); drag.p1 = p; return; }
     if (drag.pen) { const d = drag.pen, q = [Math.round(p.x - d.x), Math.round(p.y - d.y)], l = d.pts[d.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) > S * scale() * .08) { d.pts.push(q); draw(); } return; }
+    if (drag.via) { drag.via.via[drag.k] = [Math.round(p.x), Math.round(p.y)]; draw(); return; }
     if (drag.bend) { setBend(drag.bend[0], drag.bend[1], p); draw(); return; }
     if (drag.bendLine) { const l = drag.bendLine; l.cx = 2 * p.x - (l.x + l.x2) / 2; l.cy = 2 * p.y - (l.y + l.y2) / 2; draw(); return; }
     if (drag.line) { if (drag.end === 1) { drag.line.x = p.x; drag.line.y = p.y; } else { drag.line.x2 = p.x; drag.line.y2 = p.y; } draw(); return; }
@@ -373,6 +407,7 @@
         g.i.x = g.x + dx; g.i.y = g.y + dy;
         if (g.x2 != null) { g.i.x2 = g.x2 + dx; g.i.y2 = g.y2 + dy; }
         if (g.cx != null && LINES.includes(g.i.kind)) { g.i.cx = g.cx + dx; g.i.cy = g.cy + dy; }
+        if (g.via0 && multi.size) g.i.via = g.via0.map(v => [v[0] + dx, v[1] + dy]);
       });
       draw();
     }
@@ -414,7 +449,7 @@
 
   // ---------- selection actions: copy / paste / duplicate / delete ----------
   const selItems = () => { const st = setupObj(); return st ? st.items.filter(i => isSel(i.id)) : []; };
-  const shift = (n, dx, dy) => { n.x += dx; n.y += dy; if (n.x2 != null) { n.x2 += dx; n.y2 += dy; } if (n.cx != null && LINES.includes(n.kind)) { n.cx += dx; n.cy += dy; } return n; };
+  const shift = (n, dx, dy) => { n.x += dx; n.y += dy; if (n.x2 != null) { n.x2 += dx; n.y2 += dy; } if (n.cx != null && LINES.includes(n.kind)) { n.cx += dx; n.cy += dy; } if (n.via) n.via = n.via.map(v => [v[0] + dx, v[1] + dy]); return n; };
   function copySel() { const l = selItems(); if (!l.length) { toast("Select something first (drag a box round it)"); return false; } clip = JSON.parse(JSON.stringify(l)); toast(l.length + " copied · go to the next setup and Ctrl+V"); return true; }
   function paste(dx = 0, dy = 0) {
     const st = setupObj(); if (!clip || !st) return toast("Nothing copied yet");
@@ -433,7 +468,7 @@
     closeMenus();
     const m = document.createElement("div"); m.className = "menu"; m.style.left = e.clientX + "px"; m.style.top = e.clientY + "px";
     const n = selItems().length, sized = it && ["char", "cam", "gear", "shape"].includes(it.kind);
-    m.innerHTML = it ? `<button data-a="dup">Duplicate</button><button data-a="copy">Copy${n > 1 ? " " + n + " items" : ""}</button><button data-a="next">Copy to next setup</button>${sized ? `<button data-a="big">Bigger ( ] )</button><button data-a="small">Smaller ( [ )</button>` : ""}${it.cx != null ? `<button data-a="straight">Straighten</button>` : ""}${it.kind === "cable" ? `<button data-a="flip">Flip corner</button>` : ""}<button data-a="front">Bring to front</button><button data-a="back">Send to back</button><button data-a="del" class="danger">Delete</button>`
+    m.innerHTML = it ? `<button data-a="dup">Duplicate</button><button data-a="copy">Copy${n > 1 ? " " + n + " items" : ""}</button><button data-a="next">Copy to next setup</button>${sized ? `<button data-a="big">Bigger ( ] )</button><button data-a="small">Smaller ( [ )</button>` : ""}${it.cx != null || it.via ? `<button data-a="straight">Straighten</button>` : ""}${it.kind === "cable" ? `<button data-a="flip">Flip corner</button>` : ""}<button data-a="front">Bring to front</button><button data-a="back">Send to back</button><button data-a="del" class="danger">Delete</button>`
       : `<button data-a="paste">Paste here</button><button data-a="fit">Fit plan (F)</button><button data-a="keys">Shortcuts (?)</button><button data-a="fb">Send feedback</button>`;
     const p = pt(e);
     m.onclick = ev => {
@@ -442,7 +477,7 @@
       if (a === "copy") copySel();
       if (a === "next") copyToNextSetup();
       if (a === "big" || a === "small") { snapshot(); resize(selItems(), a === "big" ? .2 : -.2); save(); draw(); renderProps(); }
-      if (a === "straight") { snapshot(); delete it.cx; delete it.cy; save(); draw(); }
+      if (a === "straight") { snapshot(); delete it.cx; delete it.cy; delete it.via; save(); draw(); }
       if (a === "flip") { snapshot(); it.flip = !it.flip; save(); draw(); }
       if (a === "front" || a === "back") { snapshot(); const l = selItems(); st.items = st.items.filter(i => !isSel(i.id)); st.items = a === "front" ? st.items.concat(l) : l.concat(st.items); save(); draw(); }
       if (a === "del") removeSel();
@@ -504,10 +539,10 @@
     let h = "";
     if (it.kind === "cam") {
       $("propHead").textContent = it.ref + " cam · " + it.label;
-      h += f("Lens", inp("lens", it.lens, "35mm", "lensList")) + f("Shot size", inp("shot", it.shot, "MCU", "shotList")) + f("Rig / movement", inp("move", it.move, "Sticks, slider, track, gimbal...", "rigList")) + f("Height", inp("height", it.height, "1.4 m")) + f("Size", `<input type="range" min=".4" max="3" step=".1" data-k="size" value="${it.size || 1}">`) + f("Notes", `<textarea data-k="note">${esc(it.note || "")}</textarea>`);
+      h += f("Lens", inp("lens", it.lens, "35mm", "lensList")) + f("Shot size", inp("shot", it.shot, "MCU", "shotList")) + f("Rig / movement", inp("move", it.move, "Sticks, slider, track, gimbal...", "rigList")) + f("Height", inp("height", it.height, "1.4 m")) + (it.n > 1 ? f("Move line into this mark (faint to strong)", `<input type="range" min=".1" max="1" step=".05" data-k="fade" value="${it.fade == null ? 1 : it.fade}">`) : "") + f("Size", `<input type="range" min=".4" max="3" step=".1" data-k="size" value="${it.size || 1}">`) + f("Notes", `<textarea data-k="note">${esc(it.note || "")}</textarea>`);
     } else if (it.kind === "char") {
       $("propHead").textContent = it.ref + " · position " + it.n;
-      h += f("Action at this mark", `<textarea data-k="note" placeholder="What happens here">${esc(it.note || "")}</textarea>`) + f("Size", `<input type="range" min=".4" max="3" step=".1" data-k="size" value="${it.size || 1}">`);
+      h += f("Action at this mark", `<textarea data-k="note" placeholder="What happens here">${esc(it.note || "")}</textarea>`) + (it.n > 1 ? f("Move line into this mark (faint to strong)", `<input type="range" min=".1" max="1" step=".05" data-k="fade" value="${it.fade == null ? 1 : it.fade}">`) : "") + f("Size", `<input type="range" min=".4" max="3" step=".1" data-k="size" value="${it.size || 1}">`);
     } else if (it.kind === "gear") {
       $("propHead").textContent = Assets.GEAR[it.ref]?.name || "Gear";
       h += f("Label / notes", inp("note", it.note, "e.g. 2K through window")) + f("Size", `<input type="range" min=".5" max="3" step=".1" data-k="size" value="${it.size || 1}">`);
@@ -576,10 +611,11 @@
     box.innerHTML = `<div class="card wide"><h2>Settings</h2>
       <div class="setrow">Character + camera size<input type="range" min=".5" max="2" step=".05" data-s="mark" value="${SET.mark}"></div>
       <div class="setrow">Move dots<input type="range" min=".4" max="2" step=".05" data-s="dot" value="${SET.dot}"></div>
+      <div class="setrow">Move lines (faint to strong)<input type="range" min=".1" max="1" step=".05" data-s="trail" value="${SET.trail}"></div>
       <div class="setrow">Cable darkness<input type="range" min=".15" max="1" step=".05" data-s="cable" value="${SET.cable}"></div>
       <p class="hint">Sizes here are for your screen. To size one mark for everyone, select it and use [ ] or the Size slider.</p>
       <h3>Shortcuts</h3><div class="keys">${KEYS.map(([k, d]) => `<kbd>${k}</kbd><span>${d}</span>`).join("")}</div>
-      <div class="row"><button class="btn" data-a="fb">Send feedback</button></div>
+      <div class="row"><button class="btn" data-a="fb">Send feedback</button><a class="btn" href="terms.html" target="_blank">Terms and privacy</a></div><p class="hint">© 2026 Matthew Prins / Watermelon Media 01. Planning aid only, provided as is. By using the app you accept the Terms.</p>
       ${dev ? `<h3>Developer</h3><button class="btn" data-a="log">Activity log + feedback (Firebase)</button>` : ""}
       <div class="row"><button class="btn red" data-a="x">Close</button></div></div>`;
     box.querySelectorAll("[data-s]").forEach(r => r.oninput = () => { SET[r.dataset.s] = +r.value; saveSet(); draw(); });
