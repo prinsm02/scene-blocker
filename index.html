@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="assets/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=140">
 </head>
 <body>
 <div class="splash" id="splash">
@@ -95,16 +95,16 @@
 <div class="chat" id="chat" hidden style="display:none"><div class="ch"><b>Crew chat</b><button type="button" class="link" id="chatClose">Close &#10005;</button></div><div class="msgs" id="msgs"></div><form id="chatForm"><input id="chatIn" type="text" placeholder="Message the crew" autocomplete="off"><button class="btn red small">Send</button></form></div>
 <div class="marquee" id="marquee" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="config.js"></script>
+<script src="config.js?v=140"></script>
 <script>
   if (window.SB_FIREBASE) ["app", "auth", "firestore"].forEach(m => document.write('<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-' + m + '-compat.js"><\/script>'));
 </script>
-<script src="sync.js"></script>
-<script src="devseed.js"></script>
-<script src="store.js"></script>
-<script src="parse.js"></script>
-<script src="assets.js"></script>
-<script src="app.js"></script>
+<script src="sync.js?v=140"></script>
+<script src="devseed.js?v=140"></script>
+<script src="store.js?v=140"></script>
+<script src="parse.js?v=140"></script>
+<script src="assets.js?v=140"></script>
+<script src="app.js?v=140"></script>
 <script>document.getElementById("btnFeedback").onclick = () => window.Sync && Sync.feedback();</script>
 <script>document.getElementById("btnShot").onclick = () => document.getElementById("right").classList.toggle("open");</script>
 </body>

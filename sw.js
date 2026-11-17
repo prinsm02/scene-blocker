@@ -1,5 +1,5 @@
 // Offline support. App files: newest from the network when online (so updates arrive at once), cached copy when offline.
-const VERSION = "scene-blocker-v13";
+const VERSION = "scene-blocker-v14";
 const FILES = ["./", "index.html", "style.css", "config.js", "sync.js", "devseed.js", "store.js", "parse.js", "assets.js", "app.js", "terms.html", "manifest.webmanifest", "assets/icon.svg", "assets/icon-180.png", "assets/icon-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())));
