@@ -162,3 +162,9 @@ textarea{min-height:76px;resize:vertical}
 .keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}.keys kbd{background:var(--panel2);border:1px solid var(--line2);border-radius:5px;padding:1px 6px;font-family:inherit;font-size:12px;white-space:nowrap}
 .setrow{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:13px}.setrow input[type=range]{flex:1}
 .devlog{max-height:50vh;overflow:auto;font-size:12px}.devlog table{width:100%;border-collapse:collapse}.devlog td,.devlog th{border-bottom:1px solid var(--line);padding:4px;text-align:left;vertical-align:top}
+
+.prodrow{display:flex;align-items:center;gap:8px}.prodrow .prod{flex:1;min-width:0}
+.projs{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.proj{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer;color:var(--text);text-align:left}
+.proj.on{border-color:var(--red)}.proj small{color:var(--muted)}
+#setupNote{width:100%;resize:vertical;min-height:54px}

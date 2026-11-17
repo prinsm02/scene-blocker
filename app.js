@@ -157,7 +157,7 @@
     const box = $("setupTabs"); box.innerHTML = "";
     if (!cur.scene) return;
     setups().forEach((st, k) => {
-      const b = document.createElement("button"); b.textContent = st.name; if (k === cur.setup) b.className = "on";
+      const b = document.createElement("button"); b.textContent = st.name + (st.notes && st.notes.trim() ? " •" : ""); if (k === cur.setup) b.className = "on";
       b.onclick = () => { if (k === cur.setup) return setupMenu(b); cur.setup = k; sel = null; renderAll(); announce(); };
       b.title = k === cur.setup ? "Tap again for rename, duplicate or delete" : "";
       box.appendChild(b);
@@ -194,7 +194,7 @@
     renderPick();
   };
   function renderPick() {
-    const box = $("pick"); box.innerHTML = ""; box.classList.toggle("show", ["char", "cam", "gear", "props", "line180", "track", "cable", "shape"].includes(tool));
+    const box = $("pick"); box.innerHTML = ""; box.classList.toggle("show", ["draw", "char", "cam", "gear", "props", "line180", "track", "cable", "shape"].includes(tool));
     const opts = [];
     if (tool === "char" && prod) {
       const cast = sceneObj()?.characters.length ? sceneObj().characters : prod.characters.map(c => c.name);
@@ -206,7 +206,7 @@
     if (tool === "shape") [["rect", "Box"], ["circle", "Circle"], ["label", "Text label"]].forEach(([v, n]) => opts.push({ v, html: Assets.shapeIcon(v) + n }));
     if (!pickVal && opts.length) pickVal = opts[0].v;
     opts.forEach(o => { const b = document.createElement("button"); b.innerHTML = o.html; if (o.v === pickVal) b.className = "on"; b.onclick = () => { if (o.v === "__add") return addCharacter(); pickVal = o.v; renderPick(); }; box.appendChild(b); });
-    const hint = { char: "Tap the plan to place their next position. A1 → A2 joins with a dotted line; select a mark and drag the small diamond to bend the move.", cam: "Tap the plan to place the camera. Tap again for its move (A1 → A2). Drag the diamond to bend it.", gear: "Tap the plan to place it.", props: "Tap the plan to place it.", line180: "Drag across the plan to draw the 180 line.", track: "Drag to lay track. Select it: drag the ends, drag the middle diamond to curve it, drag the rails to move it.", cable: "Drag from the power to the light. The cable runs at right angles.", shape: "Tap the plan to place a shape, then type its label on the right." }[tool];
+    const hint = { char: "Tap the plan to place their next position. A1 → A2 joins with a dotted line; select a mark and drag the small diamond to bend the move.", cam: "Tap the plan to place the camera. Tap again for its move (A1 → A2). Drag the diamond to bend it.", gear: "Tap the plan to place it.", props: "Tap the plan to place it.", line180: "Drag across the plan to draw the 180 line.", track: "Drag to lay track. Select it: drag the ends, drag the middle diamond to curve it, drag the rails to move it.", cable: "Drag from the power to the light. The cable runs at right angles.", shape: "Tap the plan to place a shape, then type its label on the right.", draw: "Draw on the plan to point something out. It glows in your colour with your name. Select it and press Delete to remove." }[tool];
     if (hint) box.insertAdjacentHTML("beforeend", `<span class="hint">${hint}</span>`);
   }
 
@@ -248,7 +248,7 @@
     $("empty").innerHTML = !prod ? `<div><b>Start here</b><br>Tap <b>Import script</b> on the left.</div>` : !cur.scene ? "Pick a scene." : `<div><b>No floor plan for this location yet</b><br>Choose one at the top, or tap <b>Add floor plan</b> on the left.</div>`;
     if (!p || !st) { svg.innerHTML = ""; return; }
     const s = S * scale();
-    let out = `<image href="${p.src}" x="0" y="0" width="${p.w}" height="${p.h}"/>`;
+    let out = `<defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${s * .12}"/></filter></defs><image href="${p.src}" x="0" y="0" width="${p.w}" height="${p.h}"/>`;
     const groups = {};
     st.items.filter(i => i.kind === "char" || i.kind === "cam").forEach(i => (groups[i.kind + "|" + i.ref] ||= []).push(i));
     Object.values(groups).forEach(g => {
@@ -263,6 +263,10 @@
       }
     });
     st.items.filter(i => LINES.includes(i.kind)).forEach(l => out += lineSvg(l, s));
+    st.items.filter(i => i.kind === "draw").forEach(d => {
+      const path = "M" + d.pts.map(q => (d.x + q[0]) + " " + (d.y + q[1])).join(" L"), on = isSel(d.id), e = d.pts[d.pts.length - 1];
+      out += `<g class="mark" data-id="${d.id}"><path d="${path}" fill="none" stroke="transparent" stroke-width="${s * .7}" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${d.colour}" stroke-opacity=".35" stroke-width="${s * .45}" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/><path d="${path}" fill="none" stroke="${d.colour}" stroke-width="${s * .1}" stroke-linecap="round" stroke-linejoin="round"/>${on ? `<path d="${path}" fill="none" stroke="#fff" stroke-width="${s * .03}" stroke-dasharray="${s * .1} ${s * .1}"/>` : ""}${d.by ? `<text x="${d.x + e[0] + s * .25}" y="${d.y + e[1] - s * .2}" font-size="${s * .28}" font-weight="600" fill="${d.colour}" stroke="#14161B" stroke-width="${s * .06}" paint-order="stroke">${esc(d.by)}</text>` : ""}</g>`;
+    });
     st.items.filter(i => i.kind === "gear" || i.kind === "shape").forEach(i => out += markSvg(i));
     st.items.filter(i => i.kind === "cam" || i.kind === "char").forEach(i => out += markSvg(i));
     const sc = sceneObj(), d = new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
@@ -306,6 +310,11 @@
     if (e.target.classList.contains("bend")) {
       const b = st.items.find(i => i.id === e.target.dataset.id), a = st.items.filter(i => i.kind === b.kind && i.ref === b.ref && i.n < b.n).sort((x, y) => y.n - x.n)[0];
       if (a) { snapshot(); drag = { bend: [a, b] }; } return;
+    }
+    if (tool === "draw" && !m) {
+      snapshot(); const who = window.Sync && Sync.me ? Sync.me : {};
+      const d = { id: uid(), kind: "draw", x: p.x, y: p.y, pts: [[0, 0]], colour: who.colour || "#FFE45C", by: who.name || "" };
+      st.items.push(d); sel = null; multi.clear(); drag = { pen: d }; draw(); return;
     }
     if (LINES.includes(tool) && !m) {
       snapshot(); const l = { id: uid(), kind: tool, x: p.x, y: p.y, x2: p.x, y2: p.y }; st.items.push(l); sel = l.id; multi.clear(); drag = { line: l, end: 2, fresh: true }; draw(); return;
@@ -353,6 +362,7 @@
     if (drag.pinch && pointers.size === 2) { const k = drag.d0 / dist(); const c = drag.v0; view = { w: c.w * k, h: c.h * k, x: c.x + (c.w - c.w * k) / 2, y: c.y + (c.h - c.h * k) / 2 }; setView(); return; }
     if (drag.pan) { const r = svg.getBoundingClientRect(); view.x = drag.v0.x - (e.clientX - drag.sx) / r.width * view.w; view.y = drag.v0.y - (e.clientY - drag.sy) / r.height * view.h; setView(); return; }
     if (drag.box) { const b = $("marquee"); b.hidden = false; Object.assign(b.style, { left: Math.min(e.clientX, drag.sx) + "px", top: Math.min(e.clientY, drag.sy) + "px", width: Math.abs(e.clientX - drag.sx) + "px", height: Math.abs(e.clientY - drag.sy) + "px" }); drag.p1 = p; return; }
+    if (drag.pen) { const d = drag.pen, q = [Math.round(p.x - d.x), Math.round(p.y - d.y)], l = d.pts[d.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) > S * scale() * .08) { d.pts.push(q); draw(); } return; }
     if (drag.bend) { setBend(drag.bend[0], drag.bend[1], p); draw(); return; }
     if (drag.bendLine) { const l = drag.bendLine; l.cx = 2 * p.x - (l.x + l.x2) / 2; l.cy = 2 * p.y - (l.y + l.y2) / 2; draw(); return; }
     if (drag.line) { if (drag.end === 1) { drag.line.x = p.x; drag.line.y = p.y; } else { drag.line.x2 = p.x; drag.line.y2 = p.y; } draw(); return; }
@@ -383,6 +393,8 @@
     if (drag && !drag.pan && !drag.pinch) {
       if (drag.group && drag.moved) drag.group.forEach(g => delete g.i.unplaced);
       if (drag.group && !drag.moved) undoStack.pop();
+      if (drag.pen && drag.pen.pts.length < 2) { const st = setupObj(); st.items = st.items.filter(i => i !== drag.pen); }
+      if (drag.pen) logAct("highlight", "");
       if (drag.line && drag.fresh && Math.hypot(drag.line.x2 - drag.line.x, drag.line.y2 - drag.line.y) < 10) { const st = setupObj(); st.items = st.items.filter(i => i !== drag.line); sel = null; }
       save(); renderProps(); draw();
     }
@@ -464,7 +476,7 @@
     if (k === "f") fit();
     if (e.key === "?") openSettings();
     if (e.key === "[" || e.key === "]") { if (!selItems().length) return; snapshot(); resize(selItems(), e.key === "]" ? .1 : -.1); save(); draw(); renderProps(); }
-    const toolKeys = { v: "select", c: "char", a: "cam", l: "line180", g: "gear", p: "props", t: "track", e: "cable", s: "shape" };
+    const toolKeys = { h: "draw", v: "select", c: "char", a: "cam", l: "line180", g: "gear", p: "props", t: "track", e: "cable", s: "shape" };
     if (toolKeys[k]) { const b = $("tools").querySelector(`[data-tool="${toolKeys[k]}"]`); if (b) b.click(); }
   });
   document.addEventListener("keyup", e => { if (e.key === " ") spaceDown = false; });
@@ -482,8 +494,9 @@
     if (!it) {
       $("propHead").textContent = st ? st.name : "Nothing selected";
       const unplaced = st ? st.items.filter(i => i.unplaced).length : 0;
-      box.innerHTML = (st ? shotListHtml(st) : "") + (unplaced ? `<p class="note-y">${unplaced} camera${unplaced > 1 ? "s" : ""} from the shot list ${unplaced > 1 ? "are" : "is"} waiting at the bottom of the plan (yellow ring): drag ${unplaced > 1 ? "them" : "it"} into place.</p>` : "") +
+      box.innerHTML = (st ? `<div class="f"><label>Setup notes <small>(everyone sees these)</small></label><textarea id="setupNote" rows="3" placeholder="Notes for ${esc(st.name)}: changes, reminders, problems...">${esc(st.notes || "")}</textarea></div>` : "") + (st ? shotListHtml(st) : "") + (unplaced ? `<p class="note-y">${unplaced} camera${unplaced > 1 ? "s" : ""} from the shot list ${unplaced > 1 ? "are" : "is"} waiting at the bottom of the plan (yellow ring): drag ${unplaced > 1 ? "them" : "it"} into place.</p>` : "") +
         `<p class="hint">Pick a tool on the plan and tap to place. Tap the same character or camera again for the next position (A1 → A2). Drag to move, drag the white dot to turn. Drag a box to select many; right-click for options. Pinch or scroll to zoom. Press ? for all shortcuts.</p>`;
+      const n = $("setupNote"); if (n) n.oninput = () => { st.notes = n.value; save(); renderTabs(); };
       return;
     }
     const f = (lab, html) => `<div class="f"><label>${lab}</label>${html}</div>`;
@@ -498,6 +511,9 @@
     } else if (it.kind === "gear") {
       $("propHead").textContent = Assets.GEAR[it.ref]?.name || "Gear";
       h += f("Label / notes", inp("note", it.note, "e.g. 2K through window")) + f("Size", `<input type="range" min=".5" max="3" step=".1" data-k="size" value="${it.size || 1}">`);
+    } else if (it.kind === "draw") {
+      $("propHead").textContent = "Highlight" + (it.by ? " · " + it.by : "");
+      h += f("Note", inp("note", it.note, "What to look at")) + `<p class="hint">Drag to move. Delete removes it.</p>`;
     } else if (it.kind === "shape") {
       $("propHead").textContent = "Shape";
       h += f("Label", inp("note", it.note, "e.g. Bench, Water tank")) + f("Colour", `<input type="color" data-k="colour" value="${it.colour || "#ECEEF3"}">`) + f("Size", `<input type="range" min=".3" max="6" step=".1" data-k="size" value="${it.size || 1}">`);
@@ -505,7 +521,7 @@
       $("propHead").textContent = { line180: "180 line", track: "Track", cable: "Extension cable" }[it.kind];
       h += `<p class="hint">${it.kind === "cable" ? "Drag the white ends. Right-click: flip the corner." : "Drag the white ends. Drag the diamond to curve it. Right-click: straighten."}</p>` + (it.kind !== "line180" ? f("Label / notes", inp("note", it.note, it.kind === "track" ? "e.g. 6 m track" : "e.g. 25 m to genny")) : "");
     }
-    if (!LINES.includes(it.kind)) h += f("Turn", `<div class="row"><button class="btn small" data-turn="-15">⟲ 15°</button><button class="btn small" data-turn="15">⟳ 15°</button><button class="btn small" data-turn="180">180°</button></div>`);
+    if (!LINES.includes(it.kind) && it.kind !== "draw") h += f("Turn", `<div class="row"><button class="btn small" data-turn="-15">⟲ 15°</button><button class="btn small" data-turn="15">⟳ 15°</button><button class="btn small" data-turn="180">180°</button></div>`);
     h += `<div class="row"><button class="btn red" id="delMark">Delete</button><button class="btn" id="doneMark">Done</button></div>`;
     h += `<datalist id="lensList">${["16-35mm", "24-70mm", "70-200mm", "24mm", "35mm", "50mm", "85mm"].map(o => `<option value="${o}">`).join("")}</datalist><datalist id="shotList">${SHOTS.map(o => `<option value="${o}">`).join("")}</datalist><datalist id="rigList">${["Sticks", "Slider", "Track", "Dolly track", "Gimbal", "Handheld", "Lowball", "Combo"].map(o => `<option value="${o}">`).join("")}</datalist>`;
     box.innerHTML = h;
@@ -552,7 +568,7 @@
   }
 
   // ---------- settings + shortcuts ----------
-  const KEYS = [["Left click", "Select / drag. Drag on empty plan = box select"], ["Right click", "Options: duplicate, copy, copy to next setup, size, delete"], ["Middle drag / Space+drag", "Move the whole plan"], ["Wheel", "Zoom"], ["Shift+wheel, [ and ]", "Smaller / bigger (selected)"], ["Shift+click", "Add to selection"], ["Ctrl+A", "Select all in this setup"], ["Ctrl+C / Ctrl+V", "Copy / paste (paste into another setup)"], ["Ctrl+D", "Duplicate"], ["Delete", "Delete selected"], ["Ctrl+Z / Ctrl+Y", "Undo / redo"], ["Ctrl+S", "Save now (it also saves by itself)"], ["F", "Fit plan"], ["V C A L G P T E S", "Select, Character, Camera, 180 line, Gear, Props, Track, Cable, Shape"], ["Esc", "Clear selection"], ["?", "This panel"]];
+  const KEYS = [["Left click", "Select / drag. Drag on empty plan = box select"], ["Right click", "Options: duplicate, copy, copy to next setup, size, delete"], ["Middle drag / Space+drag", "Move the whole plan"], ["Wheel", "Zoom"], ["Shift+wheel, [ and ]", "Smaller / bigger (selected)"], ["Shift+click", "Add to selection"], ["Ctrl+A", "Select all in this setup"], ["Ctrl+C / Ctrl+V", "Copy / paste (paste into another setup)"], ["Ctrl+D", "Duplicate"], ["Delete", "Delete selected"], ["Ctrl+Z / Ctrl+Y", "Undo / redo"], ["Ctrl+S", "Save now (it also saves by itself)"], ["F", "Fit plan"], ["V C A L G P T E S H", "Select, Character, Camera, 180 line, Gear, Props, Track, Cable, Shape, Highlighter"], ["Esc", "Clear selection"], ["?", "This panel"]];
   function openSettings() {
     closeMenus();
     const dev = new URLSearchParams(location.search).has("dev");
@@ -572,6 +588,51 @@
   }
   $("btnSettings").onclick = openSettings;
 
+
+  // ---------- projects: several productions on one device ----------
+  async function projList() { return (await Store.get("projects")) || []; }
+  async function stashCurrent() {
+    if (!prod) return;
+    const list = await projList(), code = localStorage.getItem("sb-code") || "", solo = localStorage.getItem("sb-solo") === "1";
+    await Store.set("proj:" + prod.id, { prod, blocks });
+    const rec = { id: prod.id, title: prod.title, code: solo ? "" : code, updated: Date.now(), scenes: prod.scenes.length };
+    const k = list.findIndex(x => x.id === prod.id); if (k >= 0) list[k] = rec; else list.push(rec);
+    await Store.set("projects", list);
+  }
+  async function openProjects() {
+    closeMenus(); await stashCurrent();
+    const list = await projList();
+    const box = document.createElement("div"); box.className = "modal";
+    box.innerHTML = `<div class="card wide"><h2>Projects</h2>
+      <div class="projs">${list.map(x => `<button class="proj${prod && x.id === prod.id ? " on" : ""}" data-id="${esc(x.id)}"><b>${esc(x.title)}</b><small>${x.scenes} scenes${x.code ? " · crew " + esc(x.code) : " · this device only"}${prod && x.id === prod.id ? " · open now" : ""}</small></button>`).join("") || `<p class="hint">No projects yet.</p>`}</div>
+      <h3>New project</h3>
+      <label>Title<input id="npTitle" placeholder="e.g. Film 2"></label>
+      <p class="hint">Starts empty on this device. Then Import script and Add floor plan. To work live with a crew, use the crew button and "Start a new crew". Your current project is kept and you can switch back here any time.</p>
+      <div class="row"><button class="btn red" data-a="new">Create project</button><button class="btn" data-a="x">Close</button></div></div>`;
+    box.onclick = async e => {
+      const a = e.target.dataset.a, b = e.target.closest(".proj");
+      if (a === "x" || e.target === box) return box.remove();
+      if (b && (!prod || b.dataset.id !== prod.id)) return switchTo(list.find(x => x.id === b.dataset.id));
+      if (a === "new") {
+        const title = $("npTitle").value.trim(); if (!title) return $("npTitle").focus();
+        const np = { id: uid(), title, characters: [], scenes: [{ number: "1", intExt: "INT", location: "Location 1", time: "DAY", characters: [] }], plans: {}, locPlans: {} };
+        await Store.set("proj:" + np.id, { prod: np, blocks: { "1": [newSetup(1)] } });
+        const l2 = await projList(); l2.push({ id: np.id, title, code: "", updated: Date.now(), scenes: 1 }); await Store.set("projects", l2);
+        switchTo(l2[l2.length - 1]);
+      }
+    };
+    document.body.appendChild(box);
+  }
+  async function switchTo(rec) {
+    if (!rec) return;
+    const d = await Store.get("proj:" + rec.id); if (!d) return toast("Project not found on this device");
+    await Store.set("prod", d.prod); await Store.set("blocks", d.blocks);
+    if (rec.code) { localStorage.setItem("sb-code", rec.code); localStorage.removeItem("sb-solo"); }
+    else { localStorage.setItem("sb-solo", "1"); }
+    location.href = location.pathname + "?nosplash";
+  }
+  $("btnProjects").onclick = openProjects;
+  setTimeout(stashCurrent, 4000);
   // ---------- storyboard ----------
   function renderFrames() {
     const box = $("frames"), st = setupObj(); box.innerHTML = "";

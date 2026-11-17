@@ -228,5 +228,5 @@ window.Sync = (() => {
   }
 
   window.addEventListener("load", () => setTimeout(start, 100));
-  return { get live() { return live; }, get code() { return code; }, log, showLog, feedback, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
+  return { get me() { return me; }, get live() { return live; }, get code() { return code; }, log, showLog, feedback, pushAll, pushProduction, pushPlan, pushScene, where, cursor, peopleOn, cursorsOn, crewMenu };
 })();
