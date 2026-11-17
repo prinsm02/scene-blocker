@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="assets/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=143">
+<link rel="stylesheet" href="style.css?v=144">
 </head>
 <body>
 <div class="splash" id="splash">
@@ -23,7 +23,7 @@
   <h1>Scene Blocker</h1>
   <p class="tag">Block it. Shoot it.</p>
   <div class="bar"><i></i></div>
-  <p class="meta">Version <span id="ver">1.4.3</span><br>Developed by Matthew Prins<br>Born 16 November 2026<br><a href="terms.html" style="color:inherit">Terms and privacy</a></p>
+  <p class="meta">Version <span id="ver">1.4.4</span><br>Developed by Matthew Prins<br>Born 16 November 2026<br><a href="terms.html" style="color:inherit">Terms and privacy</a></p>
 </div>
 <header class="top">
   <div class="brand"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Scene Blocker</span></div>
@@ -59,16 +59,15 @@
     </div>
     <div class="stage" id="stage">
       <div class="tools" id="tools">
-        <button data-tool="select" class="on" title="Select, move and turn">&#10148;<small>Select</small></button>
-        <button data-tool="draw" title="Highlighter: draw to point something out (H)">&#9998;<small>Highlight</small></button>
-        <button data-tool="char" title="Place a character">&#9679;<small>Character</small></button>
-        <button data-tool="cam" title="Place a camera">&#9635;<small>Camera</small></button>
-        <button data-tool="line180" title="Draw the 180 line">&#8943;<small>180 line</small></button>
-        <button data-tool="gear" title="Lights, grip, power, VT and vehicles">&#9733;<small>Gear</small></button>
-        <button data-tool="props" title="Props (bonfire, ihadi...)">&#9832;<small>Props</small></button>
-        <button data-tool="track" title="Dolly track, straight or curved">&#9552;<small>Track</small></button>
-        <button data-tool="cable" title="Extension cable (right angles)">&#8988;<small>Cable</small></button>
-        <button data-tool="shape" title="Your own labelled shape">&#9634;<small>Shape</small></button>
+        <button data-tool="select" class="on" title="Select, move and turn (V)">&#10148;<small>Select</small></button>
+        <button data-tool="char" title="Place a character (C)">&#9679;<small>Character</small></button>
+        <button data-tool="cam" title="Place a camera (A)">&#9635;<small>Camera</small></button>
+        <button data-tool="line180" title="Draw the 180 line (L)">&#8943;<small>180 line</small></button>
+        <button data-tool="gear" title="Lights, grip, track, power, VT and vehicles (G)">&#9733;<small>Gear</small></button>
+        <button data-tool="props" title="Props (P)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg><small>Props</small></button>
+        <button data-tool="cable" title="Extension cable, right angles (E)">&#8988;<small>Cable</small></button>
+        <button data-tool="shape" title="Your own labelled shape (S)">&#9634;<small>Shape</small></button>
+        <button data-tool="draw" title="Highlight: draw to point something out and add a note (H)">&#9998;<small>Highlight</small></button>
         <span class="sep"></span>
         <button data-act="undo" title="Undo (Ctrl+Z)">&#8630;<small>Undo</small></button>
         <button data-act="redo" title="Redo (Ctrl+Shift+Z)">&#8631;<small>Redo</small></button>
@@ -95,16 +94,16 @@
 <div class="chat" id="chat" hidden style="display:none"><div class="ch"><b>Crew chat</b><button type="button" class="link" id="chatClose">Close &#10005;</button></div><div class="msgs" id="msgs"></div><form id="chatForm"><input id="chatIn" type="text" placeholder="Message the crew" autocomplete="off"><button class="btn red small">Send</button></form></div>
 <div class="marquee" id="marquee" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="config.js?v=143"></script>
+<script src="config.js?v=144"></script>
 <script>
   if (window.SB_FIREBASE) ["app", "auth", "firestore"].forEach(m => document.write('<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-' + m + '-compat.js"><\/script>'));
 </script>
-<script src="sync.js?v=143"></script>
-<script src="devseed.js?v=143"></script>
-<script src="store.js?v=143"></script>
-<script src="parse.js?v=143"></script>
-<script src="assets.js?v=143"></script>
-<script src="app.js?v=143"></script>
+<script src="sync.js?v=144"></script>
+<script src="devseed.js?v=144"></script>
+<script src="store.js?v=144"></script>
+<script src="parse.js?v=144"></script>
+<script src="assets.js?v=144"></script>
+<script src="app.js?v=144"></script>
 <script>document.getElementById("btnFeedback").onclick = () => window.Sync && Sync.feedback();</script>
 <script>document.getElementById("btnShot").onclick = () => document.getElementById("right").classList.toggle("open");</script>
 </body>

@@ -202,6 +202,7 @@
       opts.push({ v: "__add", html: `<span class="dot add">+</span>Add character` });
     }
     if (tool === "cam") ["A", "B", "C", "D"].forEach(l => opts.push({ v: l, html: `<span class="dot cam">${l}</span>${l} cam` }));
+    if (tool === "gear") opts.push({ v: "__track", html: Assets.icon("dolly") + "Track (drag to lay, curve it)" });
     if (tool === "gear" || tool === "props") Object.entries(Assets.GEAR).filter(([k, g]) => (g.cat === "Props") === (tool === "props")).forEach(([k, g]) => opts.push({ v: k, html: Assets.icon(k) + g.name }));
     if (tool === "shape") [["rect", "Box"], ["circle", "Circle"], ["label", "Text label"]].forEach(([v, n]) => opts.push({ v, html: Assets.shapeIcon(v) + n }));
     if (!pickVal && opts.length) pickVal = opts[0].v;
@@ -255,6 +256,7 @@
     }
     return `<g class="mark" data-id="${l.id}"><path d="${d}" fill="none" stroke="transparent" stroke-width="${s * (l.kind === "track" ? 1.1 : .6)}"/>${body}${h}</g>`;
   }
+  function drawPen(d) { const g = svg.querySelector(`[data-id="${d.id}"]`); if (!g) return draw(); const path = smooth(d.pts.map(q => [d.x + q[0], d.y + q[1]])); g.querySelectorAll("path").forEach(p => p.setAttribute("d", path)); }
   function draw() {
     const p = planObj(), st = setupObj();
     $("empty").style.display = p && st ? "none" : "flex";
@@ -285,8 +287,8 @@
     });
     st.items.filter(i => LINES.includes(i.kind)).forEach(l => out += lineSvg(l, s));
     st.items.filter(i => i.kind === "draw").forEach(d => {
-      const path = "M" + d.pts.map(q => (d.x + q[0]) + " " + (d.y + q[1])).join(" L"), on = isSel(d.id), e = d.pts[d.pts.length - 1];
-      out += `<g class="mark" data-id="${d.id}"><path d="${path}" fill="none" stroke="transparent" stroke-width="${s * .7}" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${d.colour}" stroke-opacity=".35" stroke-width="${s * .45}" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/><path d="${path}" fill="none" stroke="${d.colour}" stroke-width="${s * .1}" stroke-linecap="round" stroke-linejoin="round"/>${on ? `<path d="${path}" fill="none" stroke="#fff" stroke-width="${s * .03}" stroke-dasharray="${s * .1} ${s * .1}"/>` : ""}${d.by ? `<text x="${d.x + e[0] + s * .25}" y="${d.y + e[1] - s * .2}" font-size="${s * .28}" font-weight="600" fill="${d.colour}" stroke="#14161B" stroke-width="${s * .06}" paint-order="stroke">${esc(d.by)}</text>` : ""}</g>`;
+      const path = smooth(d.pts.map(q => [d.x + q[0], d.y + q[1]])), on = isSel(d.id), e = d.pts[d.pts.length - 1];
+      out += `<g class="mark" data-id="${d.id}"><path d="${path}" fill="none" stroke="transparent" stroke-width="${s * .7}" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${d.colour}" stroke-opacity=".35" stroke-width="${s * .45}" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/><path d="${path}" fill="none" stroke="${d.colour}" stroke-width="${s * .1}" stroke-linecap="round" stroke-linejoin="round"/>${on ? `<path d="${path}" fill="none" stroke="#fff" stroke-width="${s * .03}" stroke-dasharray="${s * .1} ${s * .1}"/>` : ""}${d.by || d.note ? `<text x="${d.x + e[0] + s * .25}" y="${d.y + e[1] - s * .2}" font-size="${s * .3}" font-weight="600" fill="${d.colour}" stroke="#14161B" stroke-width="${s * .07}" paint-order="stroke">${esc((d.by ? d.by.split(" ")[0] : "") + (d.note ? (d.by ? ": " : "") + d.note : ""))}</text>` : ""}</g>`;
     });
     st.items.filter(i => i.kind === "gear" || i.kind === "shape").forEach(i => out += markSvg(i));
     st.items.filter(i => i.kind === "cam" || i.kind === "char").forEach(i => out += markSvg(i));
@@ -344,9 +346,12 @@
       const b = st.items.find(i => i.id === e.target.dataset.id), a = st.items.filter(i => i.kind === b.kind && i.ref === b.ref && i.n < b.n).sort((x, y) => y.n - x.n)[0];
       if (a) { snapshot(); drag = { bend: [a, b] }; } return;
     }
-    if (tool === "draw" && !m) {
+    if (tool === "gear" && pickVal === "__track" && !m) {
+      snapshot(); const l = { id: uid(), kind: "track", x: p.x, y: p.y, x2: p.x, y2: p.y }; st.items.push(l); sel = l.id; multi.clear(); drag = { line: l, end: 2, fresh: true }; draw(); return;
+    }
+    if (tool === "draw") {
       snapshot(); const who = window.Sync && Sync.me ? Sync.me : {};
-      const d = { id: uid(), kind: "draw", x: p.x, y: p.y, pts: [[0, 0]], colour: who.colour || "#FFE45C", by: who.name || "" };
+      const d = { id: uid(), kind: "draw", x: Math.round(p.x), y: Math.round(p.y), pts: [[0, 0]], colour: who.colour || "#FFE45C", by: who.name || localStorage.getItem("sb-name") || "" };
       st.items.push(d); sel = null; multi.clear(); drag = { pen: d }; draw(); return;
     }
     if (LINES.includes(tool) && !m) {
@@ -395,7 +400,7 @@
     if (drag.pinch && pointers.size === 2) { const k = drag.d0 / dist(); const c = drag.v0; view = { w: c.w * k, h: c.h * k, x: c.x + (c.w - c.w * k) / 2, y: c.y + (c.h - c.h * k) / 2 }; setView(); return; }
     if (drag.pan) { const r = svg.getBoundingClientRect(); view.x = drag.v0.x - (e.clientX - drag.sx) / r.width * view.w; view.y = drag.v0.y - (e.clientY - drag.sy) / r.height * view.h; setView(); return; }
     if (drag.box) { const b = $("marquee"); b.hidden = false; Object.assign(b.style, { left: Math.min(e.clientX, drag.sx) + "px", top: Math.min(e.clientY, drag.sy) + "px", width: Math.abs(e.clientX - drag.sx) + "px", height: Math.abs(e.clientY - drag.sy) + "px" }); drag.p1 = p; return; }
-    if (drag.pen) { const d = drag.pen, q = [Math.round(p.x - d.x), Math.round(p.y - d.y)], l = d.pts[d.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) > S * scale() * .08) { d.pts.push(q); draw(); } return; }
+    if (drag.pen) { const d = drag.pen, q = [Math.round(p.x - d.x), Math.round(p.y - d.y)], l = d.pts[d.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) > S * scale() * .03) { d.pts.push(q); drawPen(d); } return; }
     if (drag.via) { drag.via.via[drag.k] = [Math.round(p.x), Math.round(p.y)]; draw(); return; }
     if (drag.bend) { setBend(drag.bend[0], drag.bend[1], p); draw(); return; }
     if (drag.bendLine) { const l = drag.bendLine; l.cx = 2 * p.x - (l.x + l.x2) / 2; l.cy = 2 * p.y - (l.y + l.y2) / 2; draw(); return; }
@@ -429,7 +434,7 @@
       if (drag.group && drag.moved) drag.group.forEach(g => delete g.i.unplaced);
       if (drag.group && !drag.moved) undoStack.pop();
       if (drag.pen && drag.pen.pts.length < 2) { const st = setupObj(); st.items = st.items.filter(i => i !== drag.pen); }
-      if (drag.pen) logAct("highlight", "");
+      if (drag.pen && drag.pen.pts.length >= 2) { logAct("highlight", ""); sel = drag.pen.id; multi.clear(); drag = null; save(); draw(); renderProps(); setTimeout(() => { const i = document.querySelector('#props [data-k="note"]'); if (i) i.focus(); }, 30); toast("Add a note on the right (optional)"); return; }
       if (drag.line && drag.fresh && Math.hypot(drag.line.x2 - drag.line.x, drag.line.y2 - drag.line.y) < 10) { const st = setupObj(); st.items = st.items.filter(i => i !== drag.line); sel = null; }
       save(); renderProps(); draw();
     }
@@ -511,7 +516,7 @@
     if (k === "f") fit();
     if (e.key === "?") openSettings();
     if (e.key === "[" || e.key === "]") { if (!selItems().length) return; snapshot(); resize(selItems(), e.key === "]" ? .1 : -.1); save(); draw(); renderProps(); }
-    const toolKeys = { h: "draw", v: "select", c: "char", a: "cam", l: "line180", g: "gear", p: "props", t: "track", e: "cable", s: "shape" };
+    const toolKeys = { h: "draw", v: "select", c: "char", a: "cam", l: "line180", g: "gear", p: "props", t: "gear", e: "cable", s: "shape" };
     if (toolKeys[k]) { const b = $("tools").querySelector(`[data-tool="${toolKeys[k]}"]`); if (b) b.click(); }
   });
   document.addEventListener("keyup", e => { if (e.key === " ") spaceDown = false; });
@@ -529,8 +534,9 @@
     if (!it) {
       $("propHead").textContent = st ? st.name : "Nothing selected";
       const unplaced = st ? st.items.filter(i => i.unplaced).length : 0;
-      box.innerHTML = (st ? `<div class="f"><label>Setup notes <small>(everyone sees these)</small></label><textarea id="setupNote" rows="3" placeholder="Notes for ${esc(st.name)}: changes, reminders, problems...">${esc(st.notes || "")}</textarea></div>` : "") + (st ? shotListHtml(st) : "") + (unplaced ? `<p class="note-y">${unplaced} camera${unplaced > 1 ? "s" : ""} from the shot list ${unplaced > 1 ? "are" : "is"} waiting at the bottom of the plan (yellow ring): drag ${unplaced > 1 ? "them" : "it"} into place.</p>` : "") +
+      box.innerHTML = (st ? `<div class="f"><label>Setup notes <small>(everyone sees these)</small></label><textarea id="setupNote" rows="3" placeholder="Notes for ${esc(st.name)}: changes, reminders, problems...">${esc(st.notes || "")}</textarea></div>` : "") + (st && st.items.some(i => i.kind === "draw") ? `<div class="f"><label>Highlights</label>${st.items.filter(i => i.kind === "draw").map(d => `<button class="hl" data-hl="${d.id}"><i style="background:${d.colour}"></i><b>${esc(d.by || "Someone")}</b> ${esc(d.note || "(no note)")}</button>`).join("")}</div>` : "") + (st ? shotListHtml(st) : "") + (unplaced ? `<p class="note-y">${unplaced} camera${unplaced > 1 ? "s" : ""} from the shot list ${unplaced > 1 ? "are" : "is"} waiting at the bottom of the plan (yellow ring): drag ${unplaced > 1 ? "them" : "it"} into place.</p>` : "") +
         `<p class="hint">Pick a tool on the plan and tap to place. Tap the same character or camera again for the next position (A1 → A2). Drag to move, drag the white dot to turn. Drag a box to select many; right-click for options. Pinch or scroll to zoom. Press ? for all shortcuts.</p>`;
+      box.querySelectorAll("[data-hl]").forEach(b => b.onclick = () => { sel = b.dataset.hl; multi.clear(); draw(); renderProps(); });
       const n = $("setupNote"); if (n) n.oninput = () => { st.notes = n.value; save(); renderTabs(); };
       return;
     }
@@ -548,7 +554,7 @@
       h += f("Label / notes", inp("note", it.note, "e.g. 2K through window")) + f("Size", `<input type="range" min=".5" max="3" step=".1" data-k="size" value="${it.size || 1}">`);
     } else if (it.kind === "draw") {
       $("propHead").textContent = "Highlight" + (it.by ? " · " + it.by : "");
-      h += f("Note", inp("note", it.note, "What to look at")) + `<p class="hint">Drag to move. Delete removes it.</p>`;
+      h += f("Note (shows on the plan and in the setup's Highlights list)", inp("note", it.note, "e.g. move this lamp 1 m left")) + `<p class="hint">Drag to move. Delete removes it.</p>`;
     } else if (it.kind === "shape") {
       $("propHead").textContent = "Shape";
       h += f("Label", inp("note", it.note, "e.g. Bench, Water tank")) + f("Colour", `<input type="color" data-k="colour" value="${it.colour || "#ECEEF3"}">`) + f("Size", `<input type="range" min=".3" max="6" step=".1" data-k="size" value="${it.size || 1}">`);
@@ -603,7 +609,7 @@
   }
 
   // ---------- settings + shortcuts ----------
-  const KEYS = [["Left click", "Select / drag. Drag on empty plan = box select"], ["Right click", "Options: duplicate, copy, copy to next setup, size, delete"], ["Middle drag / Space+drag", "Move the whole plan"], ["Wheel", "Zoom"], ["Shift+wheel, [ and ]", "Smaller / bigger (selected)"], ["Shift+click", "Add to selection"], ["Ctrl+A", "Select all in this setup"], ["Ctrl+C / Ctrl+V", "Copy / paste (paste into another setup)"], ["Ctrl+D", "Duplicate"], ["Delete", "Delete selected"], ["Ctrl+Z / Ctrl+Y", "Undo / redo"], ["Ctrl+S", "Save now (it also saves by itself)"], ["F", "Fit plan"], ["V C A L G P T E S H", "Select, Character, Camera, 180 line, Gear, Props, Track, Cable, Shape, Highlighter"], ["Esc", "Clear selection"], ["?", "This panel"]];
+  const KEYS = [["Left click", "Select / drag. Drag on empty plan = box select"], ["Right click", "Options: duplicate, copy, copy to next setup, size, delete"], ["Middle drag / Space+drag", "Move the whole plan"], ["Wheel", "Zoom"], ["Shift+wheel, [ and ]", "Smaller / bigger (selected)"], ["Shift+click", "Add to selection"], ["Ctrl+A", "Select all in this setup"], ["Ctrl+C / Ctrl+V", "Copy / paste (paste into another setup)"], ["Ctrl+D", "Duplicate"], ["Delete", "Delete selected"], ["Ctrl+Z / Ctrl+Y", "Undo / redo"], ["Ctrl+S", "Save now (it also saves by itself)"], ["F", "Fit plan"], ["V C A L G P E S H", "Select, Character, Camera, 180 line, Gear (incl. track), Props, Cable, Shape, Highlight"], ["Esc", "Clear selection"], ["?", "This panel"]];
   function openSettings() {
     closeMenus();
     const dev = new URLSearchParams(location.search).has("dev");

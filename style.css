@@ -170,3 +170,7 @@ textarea{min-height:76px;resize:vertical}
 #setupNote{width:100%;resize:vertical;min-height:54px}
 .chat[hidden],.marquee[hidden]{display:none!important}
 .modal.gate{background:#14161B;backdrop-filter:none}
+.tools{max-height:calc(100% - 24px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.tools button{flex-shrink:0;color:var(--text)}
+@media (max-width:900px){.tools{max-height:none;max-width:calc(100% - 24px);overflow-x:auto;overflow-y:hidden}}
+.hl{display:flex;gap:6px;align-items:center;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:4px;color:var(--text);cursor:pointer;font-size:12px}.hl i{width:10px;height:10px;border-radius:50%;flex-shrink:0}
