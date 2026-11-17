@@ -19,26 +19,37 @@ window.Sync = (() => {
       try { await db.enablePersistence({ synchronizeTabs: true }); } catch (e) {}
       await firebase.auth().signInAnonymously();
     } catch (e) { console.warn("live mode unavailable", e); badge("Offline · on this device"); return; }
-    const linkCode = new URLSearchParams(location.search).get("crew");
+    const qs = new URLSearchParams(location.search), linkCode = qs.get("crew"), vip = qs.get("vip"), inv = qs.get("invite");
     me.name = localStorage.getItem("sb-name") || "";
+    // VIP link: signs the owner straight in (name + crew come from the private access code).
+    if (vip) { const a = await access(vip); history.replaceState(null, "", location.pathname); if (a && a.name) { save(a.name, a.crew); connect(); return; } }
     code = (linkCode || localStorage.getItem("sb-code") || "").toUpperCase();
     const solo = localStorage.getItem("sb-solo") === "1" && !linkCode;
     if (solo) { badge("On this device", true); return; }
-    if (!me.name || !code) { const ok = await askJoin(code); if (!ok) { badge("On this device", true); return; } }
-    if (linkCode) history.replaceState(null, "", location.pathname);
+    if (!me.name || !code) {
+      // Private app: nobody gets past this screen without a crew code or an access code.
+      const ok = await askJoin(code || (inv || "").toUpperCase(), true); if (!ok) { badge("On this device", true); return; }
+    }
+    if (linkCode || inv) history.replaceState(null, "", location.pathname);
     connect();
   }
 
-  function askJoin(prefill) {
+  // Access codes live in access/{CODE} = {crew, name?}. The app can read one code it knows, never list them.
+  async function access(c) {
+    c = String(c || "").trim().toUpperCase().replace(/[^A-Z0-9-]/g, ""); if (c.length < 6) return null;
+    try { const d = await db.collection("access").doc(c).get(); if (d.exists && d.data().active !== false) return d.data(); } catch (e) {}
+    return null;
+  }
+  function askJoin(prefill, locked) {
     return new Promise(res => {
-      const box = el(`<div class="modal"><form class="card">
+      const box = el(`<div class="modal${locked ? " gate" : ""}"><form class="card">
         <img src="assets/icon.svg" width="44" height="44" alt="">
-        <h2>Welcome to Scene Blocker</h2>
+        <h2>${locked ? "Scene Blocker is private" : "Welcome to Scene Blocker"}</h2>${locked ? `<p class="hint">Enter the access code you were given.</p>` : ""}
         <label>Your name<input name="n" type="text" placeholder="e.g. Matthew - 1st AD" value="${esc(me.name)}" required autocomplete="name"></label>
-        <label>Crew code <small>(in your invite link)</small><input name="c" type="text" placeholder="ABCD-1234" value="${esc(prefill)}" autocapitalize="characters"></label>
+        <label>${locked ? "Access code" : "Crew code"} <small>(in your invite)</small><input name="c" type="text" placeholder="ABCD-1234" value="${esc(prefill)}" autocapitalize="characters"></label>
         <button class="btn red big" name="join">Join my crew</button>
-        <div class="or"><button type="button" class="link" data-a="new">Start a new crew with what's on this device</button>
-        <button type="button" class="link" data-a="solo">Just me, on this device</button></div>
+        ${locked ? `<p class="hint"><a href="terms.html" style="color:inherit">Terms and privacy</a></p>` : `<div class="or"><button type="button" class="link" data-a="new">Start a new crew with what's on this device</button>
+        <button type="button" class="link" data-a="solo">Just me, on this device</button></div>`}
         <p class="err" hidden></p></form></div>`);
       const f = box.querySelector("form"), err = box.querySelector(".err");
       const done = ok => { box.remove(); res(ok); };
@@ -46,20 +57,21 @@ window.Sync = (() => {
       f.onsubmit = async e => {
         e.preventDefault(); const n = name(); if (!n) return;
         const c = f.c.value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
-        if (c.length < 6) { err.textContent = "Type the crew code from your invite (e.g. ABCD-1234)."; err.hidden = false; return; }
+        if (c.length < 6) { err.textContent = "Type the code from your invite."; err.hidden = false; return; }
         err.hidden = true; f.join.textContent = "Checking..."; f.join.disabled = true;
-        let exists = false;
-        try { exists = (await db.collection("prods").doc(c).get()).exists; } catch (e) {}
+        let crew = null;
+        const a = await access(c); if (a) crew = a.crew;
+        if (!crew) { try { if ((await db.collection("prods").doc(c).get()).exists) crew = c; } catch (e) {} }
         f.join.textContent = "Join my crew"; f.join.disabled = false;
-        if (!exists) { err.textContent = "No crew with that code. Check the invite link."; err.hidden = false; return; }
-        save(n, c); done(true);
+        if (!crew) { err.textContent = "That code doesn't work. Check it with whoever invited you."; err.hidden = false; return; }
+        save(n, crew); done(true);
       };
-      box.querySelector('[data-a="new"]').onclick = async () => {
+      if (!locked) box.querySelector('[data-a="new"]').onclick = async () => {
         const n = name(); if (!n) return;
         if (!App.prod) { err.textContent = "Import a script first, then start a crew."; err.hidden = false; return; }
         save(n, newCode()); localStorage.setItem("sb-new", "1"); done(true);
       };
-      box.querySelector('[data-a="solo"]').onclick = () => { localStorage.setItem("sb-solo", "1"); if (f.n.value.trim()) localStorage.setItem("sb-name", f.n.value.trim()); done(false); };
+      if (!locked) box.querySelector('[data-a="solo"]').onclick = () => { localStorage.setItem("sb-solo", "1"); if (f.n.value.trim()) localStorage.setItem("sb-name", f.n.value.trim()); done(false); };
       document.body.appendChild(box); setTimeout(() => (me.name ? f.c : f.n).focus(), 50);
     });
   }
